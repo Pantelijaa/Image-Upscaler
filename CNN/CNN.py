@@ -10,8 +10,8 @@ class CNN(nn.Module):
 		self.conv3 = nn.Conv2d(32, 1, 5, 2)
 		self.relu = nn.ReLU(inplace=True)
 
-		def forward(self, x):
-			x = self.relu(self.conv1(x))
-			x = self.relu(self.conv2(x))
-			x = self.conv3(x)
-			return x
+	def forward(self, x):
+		x = self.relu(self.conv1(x))
+		x = self.relu(self.conv2(x))
+		x = self.conv3(x)
+		return x
