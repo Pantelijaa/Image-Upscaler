@@ -3,8 +3,6 @@
 #include "../includes/stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../includes/stb_image_write.h"
-#include <iostream>
-#include <filesystem>
 
 Image::Image(int w, int h) : width(w), height(h), channels(3) {
 	data.resize(w * h);

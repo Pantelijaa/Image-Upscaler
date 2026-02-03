@@ -3,6 +3,8 @@
 #include <vector>
 #include <string>
 #include <windows.h>
+#include <iostream>
+#include <filesystem>
 
 struct Pixel {
 	unsigned char r;
