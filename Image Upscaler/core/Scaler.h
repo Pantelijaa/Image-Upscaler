@@ -5,5 +5,5 @@
 
 class Scaler {
 public:
-	static Image upscale(const Image& src, int nw, int nh, IInterpolator& it);
+	static Image upscale(Image& src, int nw, int nh, IInterpolator& it);
 };

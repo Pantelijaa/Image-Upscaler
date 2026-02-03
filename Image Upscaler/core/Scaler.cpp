@@ -1,6 +1,6 @@
 #include "Scaler.h"
 
-Image Scaler::upscale(const Image& src, int nw, int nh, IInterpolator& it) {
+Image Scaler::upscale(Image& src, int nw, int nh, IInterpolator& it) {
 	Image dst(nw, nh);
 	
 	float xr = static_cast<float>(src.getWidth()) / nw;

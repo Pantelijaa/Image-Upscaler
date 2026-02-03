@@ -3,5 +3,5 @@
 
 class IInterpolator {	
 	public:
-		virtual Pixel interpolate(const Image& image, float x, float y) = 0;
+		virtual Pixel interpolate(Image& image, float x, float y) = 0;
 };

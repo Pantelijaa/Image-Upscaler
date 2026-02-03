@@ -6,7 +6,7 @@
 #include <iostream>
 #include <filesystem>
 
-Image::Image(int w, int h) : width(w), height(h) {
+Image::Image(int w, int h) : width(w), height(h), channels(3) {
 	data.resize(w * h);
 }
 
