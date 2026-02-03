@@ -22,7 +22,6 @@ class Image {
 	bool loadFromFile(const std::string& filename);
 	bool saveToFile(const std::string& filename);
 
-		
-
+	int getWidth() const;
 
 };
