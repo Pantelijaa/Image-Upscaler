@@ -3,6 +3,8 @@
 #include "../includes/stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../includes/stb_image_write.h"
+#include <iostream>
+#include <filesystem>
 
 Image::Image(int w, int h) : width(w), height(h) {
 	data.resize(w * h);
@@ -14,6 +16,7 @@ Pixel& Image::at(int x, int y) {
 
 bool Image::loadFromFile(const std::string& filename) {
 	unsigned char* imgData = stbi_load(filename.c_str(), &width, &height, &channels, 3);
+	std::cout << std::filesystem::current_path() << std::endl; // error debug
 	if (!imgData)
 		return false;
 	data.resize(width * height);
