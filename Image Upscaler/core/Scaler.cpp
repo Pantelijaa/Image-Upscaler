@@ -13,4 +13,5 @@ Image Scaler::upscale(const Image& src, int nw, int nh, IInterpolator& it) {
 			dst.at(x, y) = it.interpolate(src, sx, sy);
 		}
 	}
+	return dst;
 }

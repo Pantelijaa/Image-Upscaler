@@ -11,5 +11,15 @@ endif()
 
 project ("Image Upscaler")
 
+find_package (Python3 REQUIRED)
+message(STATUS "Python3 executable: ${Python3_EXECUTABLE}")
+
+# cmake --build . --target train_srcnn
+add_custom_target(train_srcnn
+    COMMAND ${Python3_EXECUTABLE} CNN/CNN.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Training SRCNN model"
+)
+
 # Include sub-projects.
 add_subdirectory ("Image Upscaler")

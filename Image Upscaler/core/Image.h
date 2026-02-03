@@ -23,5 +23,6 @@ class Image {
 	bool saveToFile(const std::string& filename);
 
 	int getWidth() const;
+	int getHeight() const;
 
 };
