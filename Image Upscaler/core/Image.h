@@ -26,5 +26,6 @@ class Image {
 
 	int getWidth() const;
 	int getHeight() const;
+	std::vector<Pixel> getData() const;
 
 };

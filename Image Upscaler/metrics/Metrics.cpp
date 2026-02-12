@@ -1,6 +1,6 @@
 #include "Metrics.h"
 
-Metrcis::calculatePSNR(const Image& img1, const Image& img2) {
+double Metrics::calculatePSNR(const Image& img1, const Image& img2) {
 	double mse = calculateMSE(img1, img2);
 	if (mse == 0) {
 		return INFINITY; // Images are identical
@@ -8,16 +8,64 @@ Metrcis::calculatePSNR(const Image& img1, const Image& img2) {
 	return 10 * log10((255 * 255) / mse);
 }
 
+double Metrics::calculateSSIM(const Image& img1, const Image& img2) {
+	const double C1 = 6.5025;
+	const double C2 = 58.5225;
+	double meanA = 0.0;
+	double meanB = 0.0;
 
-Metrcis::calculateMSE(const Image& img1, const Image& img2) {
+	if (img1.getWidth() != img2.getWidth() || img1.getHeight() != img2.getHeight()) {
+		std::cerr << "Error: Images must be of the same dimensions for SSIM calculation." << std::endl;
+		return -1.0;
+	}
+
+	std::vector<std::vector<double>> kernel = create_gaussian_kernel(11, 1.5);
+
+	int N = img1.getWidth() * img1.getHeight();
+
+
+}
+
+double Metrics::calculateMSE(const Image& img1, const Image& img2) {
 	double sum = 0.0;
-	int n = img1.width * img1.height * 3;
+	int n = img1.getWidth() * img1.getHeight() * 3;
 
-	for (int i = 0; i < img1.data.size(); i++) {
-		sum += (img1.data[i].r - img2.data[i].r, 2);
-		sum += (img1.data[i].g - img2.data[i].g, 2);
-		sum += (img1.data[i].b - img2.data[i].b, 2);
+	std::vector<Pixel> data1 = img1.getData();
+	std::vector<Pixel> data2 = img2.getData();
+
+	for (int i = 0; i < data1.size(); i++) {
+		sum += (data1[i].r - data2[i].r, 2);
+		sum += (data1[i].g - data2[i].g, 2);
+		sum += (data1[i].b - data2[i].b, 2);
 	}
 
 	return sum / n;
+}
+/**
+ Mathematical formula for Gaussian kernel: 
+ G(x, y) = (1 / (2 * pi * sigma^2)) * exp(-(x^2 + y^2) / (2 * sigma^2))
+ (1 / (2 * pi * sigma^2)) is the normalization factor to ensure the sum of the kernel is 1.
+*/
+std::vector<std::vector<double>> Metrics::create_gaussian_kernel(int size, double sigma) {
+	std::vector<std::vector<double>> kernel(size, std::vector<double>(size));
+	const int half = size / 2;
+	double sum = 0.0;
+
+	// Calculate values
+	for (int y = -half; y <= half; y++) {
+		for (int x = -half; x <= half; x++) {
+			double value = std::exp(-(x * x + y * y) / (2 * sigma * sigma));
+			kernel[y + half][x + half] = value;
+			sum += value;
+		}
+	}
+
+	// Normalize
+	for (int y = 0; y < size; y++) {
+		for (int x = 0; x < size; x++) {
+			kernel[y][x] /= sum;
+		}
+	}
+
+	return kernel;
 }

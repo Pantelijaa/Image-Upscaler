@@ -6,6 +6,7 @@
 #include "core/Scaler.h"
 #include "interpolation/IInterpolator.h"
 #include "interpolation/Bilinear.h"
+#include "metrics/Metrics.h"	
 const std::string PATH_TO_DATA = "../../../../data/";
 
 int main()
@@ -17,5 +18,6 @@ int main()
 	Image upscaledImg = Scaler::upscale(img, img.getWidth() * 2, img.getHeight() * 2, *it);
 	upscaledImg.saveToFile(PATH_TO_DATA + "/results/output_bilinear.png");
 	std::cout << "Hello CMake." << std::endl;
+	std::cout << "PSNR: " << Metrics::calculatePSNR(upscaledImg, upscaledImg) << std::endl;
 	return 0;
 }

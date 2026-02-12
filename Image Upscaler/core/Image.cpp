@@ -56,3 +56,7 @@ int Image::getWidth() const {
 int Image::getHeight() const {
 	return height;
 }
+
+std::vector<Pixel> Image::getData() const {
+	return data;
+}

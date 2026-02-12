@@ -3,7 +3,7 @@
 #
 
 # Add source to this project's executable.
-add_executable (CMakeTarget "Image Upscaler.cpp" "core/Image.h" "core/Image.cpp" "includes/stb_image.h" "includes/stb_image_write.h" "core/Scaler.h" "core/Scaler.cpp" "interpolation/IInterpolator.h" "interpolation/Bilinear.h" "interpolation/Bilinear.cpp")
+add_executable (CMakeTarget "Image Upscaler.cpp" "core/Image.h" "core/Image.cpp" "includes/stb_image.h" "includes/stb_image_write.h" "core/Scaler.h" "core/Scaler.cpp" "interpolation/IInterpolator.h" "interpolation/Bilinear.h" "interpolation/Bilinear.cpp" "metrics/Metrics.h" "metrics/Metrics.cpp")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET CMakeTarget PROPERTY CXX_STANDARD 20)
