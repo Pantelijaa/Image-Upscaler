@@ -8,5 +8,6 @@ public:
 private:
 	static double calculateMSE(const Image& img1, const Image& img2);
 	static std::vector<std::vector<double>> create_gaussian_kernel(int size, double sigma);
+	static Image convolution(const Image& img, int width, int height, const std::vector<std::vector<double>>& kernel);
 
 };
