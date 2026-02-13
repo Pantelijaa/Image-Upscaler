@@ -19,5 +19,6 @@ int main()
 	upscaledImg.saveToFile(PATH_TO_DATA + "/results/output_bilinear.png");
 	std::cout << "Hello CMake." << std::endl;
 	std::cout << "PSNR: " << Metrics::calculatePSNR(upscaledImg, upscaledImg) << std::endl;
+	std::cout << "SSIM: " << Metrics::calculateSSIM(upscaledImg, upscaledImg) << std::endl;
 	return 0;
 }

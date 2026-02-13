@@ -24,6 +24,7 @@ class Image {
 	bool loadFromFile(const std::string& filename);
 	bool saveToFile(const std::string& filename);
 
+	bool isGrayScale() const;
 	int getWidth() const;
 	int getHeight() const;
 	std::vector<Pixel> getData() const;

@@ -9,15 +9,10 @@ double Metrics::calculatePSNR(const Image& img1, const Image& img2) {
 }
 
 /**
-RGB SSIM:
+Single channel SSIM:
 SSIM formula: SSIM(x, y) = ((2 * μx * μy + C1) * (2 * σxy + C2)) / ((μx^2 + μy^2 + C1) * (σx^2 + σy^2 + C2))
 */
 double Metrics::calculateSSIM(const Image& img1, const Image& img2) {
-	const double C1 = 6.5025;
-	const double C2 = 58.5225;
-	double meanA = 0.0;
-	double meanB = 0.0;
-
 	if (img1.getWidth() != img2.getWidth() || img1.getHeight() != img2.getHeight()) {
 		std::cerr << "Error: Images must be of the same dimensions for SSIM calculation." << std::endl;
 		return -1.0;
@@ -25,20 +20,23 @@ double Metrics::calculateSSIM(const Image& img1, const Image& img2) {
 
 	int width = img1.getWidth();
 	int height = img1.getHeight();
+	int N = width * height;
 	std::vector<Pixel> data1 = img1.getData();
 	std::vector<Pixel> data2 = img2.getData();
 
-	std::vector<std::vector<double>> kernel = create_gaussian_kernel(11, 1.5);
+	std::vector<double> kernel1d = create_gaussian_kernel_1d(11, 1.5);
 
-	// μx, μy
-	Image mu_x = convolution(img1, width, height, kernel);
-	Image mu_y = convolution(img2, width, height, kernel);
-
-	// σx^2, σy^2, σxy
-	
-
-
-
+	if (img1.isGrayScale()) {
+		std::vector<double> gray1(N), gray2(N);
+		for (int i = 0; i < N; i++) {
+			gray1[i] = data1[i].r;
+			gray2[i] = data2[i].r;
+		}
+		return calculate_ssim_single_channel(gray1, gray2, width, height, kernel1d);
+	}
+	else {
+		return calculate_ssim_rgb(img1, img2, width, height, kernel1d);
+	}
 }
 
 double Metrics::calculateMSE(const Image& img1, const Image& img2) {
@@ -49,65 +47,132 @@ double Metrics::calculateMSE(const Image& img1, const Image& img2) {
 	std::vector<Pixel> data2 = img2.getData();
 
 	for (int i = 0; i < data1.size(); i++) {
-		sum += (data1[i].r - data2[i].r, 2);
-		sum += (data1[i].g - data2[i].g, 2);
-		sum += (data1[i].b - data2[i].b, 2);
+		sum += std::pow(data1[i].r - data2[i].r, 2);
+		sum += std::pow(data1[i].g - data2[i].g, 2);
+		sum += std::pow(data1[i].b - data2[i].b, 2);
 	}
 
 	return sum / n;
 }
-/**
- Mathematical formula for Gaussian kernel:
- G(x, y) = (1 / (2 * pi * sigma^2)) * exp(-(x^2 + y^2) / (2 * sigma^2))
- (1 / (2 * pi * sigma^2)) is the normalization factor to ensure the sum of the kernel is 1.
-*/
-std::vector<std::vector<double>> Metrics::create_gaussian_kernel(int size, double sigma) {
-	std::vector<std::vector<double>> kernel(size, std::vector<double>(size));
-	const int half = size / 2;
-	double sum = 0.0;
 
-	// Calculate values
-	for (int y = -half; y <= half; y++) {
-		for (int x = -half; x <= half; x++) {
-			double value = std::exp(-(x * x + y * y) / (2 * sigma * sigma));
-			kernel[y + half][x + half] = value;
-			sum += value;
-		}
+double Metrics::calculate_ssim_single_channel(const std::vector<double>& ch1, const std::vector<double>& ch2, int width, int height, const std::vector<double>& kernel1d) {
+	const double C1 = 6.5025;
+	const double C2 = 58.5225;
+	int N = width * height;
+	double ssim_sum = 0.0;
+
+	// X^2, Y^2, XY
+	std::vector<double> ch1_sq(N), ch2_sq(N), ch12(N);
+	for (int i = 0; i < N; i++) {
+		ch1_sq[i] = ch1[i] * ch1[i];
+		ch2_sq[i] = ch2[i] * ch2[i];
+		ch12[i] = ch1[i] * ch2[i];
 	}
 
-	// Normalize
-	for (int y = 0; y < size; y++) {
-		for (int x = 0; x < size; x++) {
-			kernel[y][x] /= sum;
-		}
+	// μx, μy
+	std::vector<double> mu_1 = convolve_channel(ch1, width, height, kernel1d);
+	std::vector<double> mu_2 = convolve_channel(ch2, width, height, kernel1d);
+
+	//  E[x²], E[y²], E[xy]
+	std::vector<double> sigma_1_sq = convolve_channel(ch1_sq, width, height, kernel1d);
+	std::vector<double> sigma_2_sq = convolve_channel(ch2_sq, width, height, kernel1d);
+	std::vector<double> sigma_12 = convolve_channel(ch12, width, height, kernel1d);
+
+	for (int i = 0; i < N; i++) {
+		double mux = mu_1[i];
+		double muy = mu_2[i];
+
+		// σ² = E[x²] - μ²
+		double sigmax2 = sigma_1_sq[i] - mux * mux;
+		double sigmay2 = sigma_2_sq[i] - muy * muy;
+		double sigmaxy = sigma_12[i] - mux * muy;
+
+		double numerator = (2 * mux * muy + C1) * (2 * sigmaxy + C2);
+		double denominator = (mux * mux + muy * muy + C1) * (sigmax2 + sigmay2 + C2);
+
+		ssim_sum += numerator / denominator;
+	}
+
+	return ssim_sum / N;
+}
+
+double Metrics::calculate_ssim_rgb(const Image& img1, const Image& img2, int width, int height, const std::vector<double>& kernel1d) {
+	int N = width * height;
+	std::vector<Pixel> data1 = img1.getData();
+	std::vector<Pixel> data2 = img2.getData();
+
+	std::vector<double> r1(N), g1(N), b1(N);
+	std::vector<double> r2(N), g2(N), b2(N);
+	for (int i = 0; i < N; i++) {
+		r1[i] = data1[i].r; g1[i] = data1[i].g; b1[i] = data1[i].b;
+		r2[i] = data2[i].r; g2[i] = data2[i].g; b2[i] = data2[i].b;
+	}
+
+	double ssim_r = calculate_ssim_single_channel(r1, r2, width, height, kernel1d);
+	double ssim_g = calculate_ssim_single_channel(g1, g2, width, height, kernel1d);
+	double ssim_b = calculate_ssim_single_channel(b1, b2, width, height, kernel1d);
+
+	return (ssim_r + ssim_g + ssim_b) / 3.0;
+}
+
+/**
+ 1D Gaussian kernel for separable convolution.
+*/
+std::vector<double> Metrics::create_gaussian_kernel_1d(int size, double sigma) {
+	std::vector<double> kernel(size);
+	int half = size / 2;
+	double sum = 0.0;
+
+	for (int x = -half; x <= half; x++) {
+		double value = std::exp(-(x * x) / (2 * sigma * sigma));
+		kernel[x + half] = value;
+		sum += value;
+	}
+
+	for (int i = 0; i < size; i++) {
+		kernel[i] /= sum;
 	}
 
 	return kernel;
 }
 
-Image Metrics::convolution(const Image& img, int width, int height, const std::vector<std::vector<double>>& kernel) {
-	int kernel_size = kernel.size();
-	int half = kernel_size / 2;
+/**
+ Separable 2D Gaussian convolution via two 1D passes:
+   1) Horizontal pass — convolve each row
+   2) Vertical pass   — convolve each column
+ Complexity: O(N * K * 2) instead of O(N * K^2)
+*/
+std::vector<double> Metrics::convolve_channel(const std::vector<double>& channel, int width, int height, const std::vector<double>& kernel1d) {
+	int ksize = static_cast<int>(kernel1d.size());
+	int half = ksize / 2;
+	int N = width * height;
 
-	Image result(width, height);
-	std::vector<Pixel> data = img.getData();
+	// Pass 1: horizontal
+	std::vector<double> temp(N, 0.0);
 	for (int y = 0; y < height; y++) {
+		int row = y * width;
 		for (int x = 0; x < width; x++) {
-			double acc_r = 0.0, acc_g = 0.0, acc_b = 0.0;
-			for (int ky = 0; ky < kernel_size; ky++) {
-				for (int kx = 0; kx < kernel_size; kx++) {
-					int img_y = std::clamp(y + ky - half, 0, height - 1);
-					int img_x = std::clamp(x + kx - half, 0, width - 1);
-					Pixel& p = data[img_y * width + img_x];
-					acc_r += p.r * kernel[ky][kx];
-					acc_g += p.g * kernel[ky][kx];
-					acc_b += p.b * kernel[ky][kx];
-				}
+			double acc = 0.0;
+			for (int k = 0; k < ksize; k++) {
+				int ix = std::clamp(x + k - half, 0, width - 1);
+				acc += kernel1d[k] * channel[row + ix];
 			}
-			result.at(x, y) = { static_cast<unsigned char>(std::clamp(acc_r, 0.0, 255.0)),
-								static_cast<unsigned char>(std::clamp(acc_g, 0.0, 255.0)),
-								static_cast<unsigned char>(std::clamp(acc_b, 0.0, 255.0)) };
+			temp[row + x] = acc;
 		}
 	}
+
+	// Pass 2: vertical
+	std::vector<double> result(N, 0.0);
+	for (int y = 0; y < height; y++) {
+		for (int x = 0; x < width; x++) {
+			double acc = 0.0;
+			for (int k = 0; k < ksize; k++) {
+				int iy = std::clamp(y + k - half, 0, height - 1);
+				acc += kernel1d[k] * temp[iy * width + x];
+			}
+			result[y * width + x] = acc;
+		}
+	}
+
 	return result;
 }

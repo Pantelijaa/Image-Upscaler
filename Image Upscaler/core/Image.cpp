@@ -60,3 +60,7 @@ int Image::getHeight() const {
 std::vector<Pixel> Image::getData() const {
 	return data;
 }
+
+bool Image::isGrayScale() const {
+	return channels == 1;
+}
