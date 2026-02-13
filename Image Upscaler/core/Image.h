@@ -27,6 +27,6 @@ class Image {
 	bool isGrayScale() const;
 	int getWidth() const;
 	int getHeight() const;
-	std::vector<Pixel> getData() const;
+	const std::vector<Pixel>& getData() const;
 
 };

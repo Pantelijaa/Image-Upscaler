@@ -21,8 +21,8 @@ double Metrics::calculateSSIM(const Image& img1, const Image& img2) {
 	int width = img1.getWidth();
 	int height = img1.getHeight();
 	int N = width * height;
-	std::vector<Pixel> data1 = img1.getData();
-	std::vector<Pixel> data2 = img2.getData();
+	const std::vector<Pixel> data1 = img1.getData();
+	const std::vector<Pixel> data2 = img2.getData();
 
 	std::vector<double> kernel1d = create_gaussian_kernel_1d(11, 1.5);
 
@@ -35,7 +35,7 @@ double Metrics::calculateSSIM(const Image& img1, const Image& img2) {
 		return calculate_ssim_single_channel(gray1, gray2, width, height, kernel1d);
 	}
 	else {
-		return calculate_ssim_rgb(img1, img2, width, height, kernel1d);
+		return calculate_ssim_rgb(data1, data2, width, height, kernel1d);
 	}
 }
 
@@ -98,10 +98,8 @@ double Metrics::calculate_ssim_single_channel(const std::vector<double>& ch1, co
 	return ssim_sum / N;
 }
 
-double Metrics::calculate_ssim_rgb(const Image& img1, const Image& img2, int width, int height, const std::vector<double>& kernel1d) {
+double Metrics::calculate_ssim_rgb(const std::vector<Pixel>& data1, const std::vector<Pixel>& data2, int width, int height, const std::vector<double>& kernel1d) {
 	int N = width * height;
-	std::vector<Pixel> data1 = img1.getData();
-	std::vector<Pixel> data2 = img2.getData();
 
 	std::vector<double> r1(N), g1(N), b1(N);
 	std::vector<double> r2(N), g2(N), b2(N);
@@ -144,7 +142,6 @@ std::vector<double> Metrics::create_gaussian_kernel_1d(int size, double sigma) {
  Separable 2D Gaussian convolution via two 1D passes:
    1) Horizontal pass — convolve each row
    2) Vertical pass   — convolve each column
- Complexity: O(N * K * 2) instead of O(N * K^2)
 */
 std::vector<double> Metrics::convolve_channel(const std::vector<double>& channel, int width, int height, const std::vector<double>& kernel1d) {
 	int ksize = static_cast<int>(kernel1d.size());

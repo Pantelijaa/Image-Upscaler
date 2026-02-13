@@ -57,7 +57,7 @@ int Image::getHeight() const {
 	return height;
 }
 
-std::vector<Pixel> Image::getData() const {
+const std::vector<Pixel>& Image::getData() const {
 	return data;
 }
 
