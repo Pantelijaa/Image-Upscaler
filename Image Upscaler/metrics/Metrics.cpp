@@ -64,9 +64,11 @@ double Metrics::calculate_ssim_single_channel(const std::vector<double>& ch1, co
 	// X^2, Y^2, XY
 	std::vector<double> ch1_sq(N), ch2_sq(N), ch12(N);
 	for (int i = 0; i < N; i++) {
-		ch1_sq[i] = ch1[i] * ch1[i];
-		ch2_sq[i] = ch2[i] * ch2[i];
-		ch12[i] = ch1[i] * ch2[i];
+		double a = ch1[i];
+		double b = ch2[i];
+		ch1_sq[i] = a * a;
+		ch2_sq[i] = b * b;
+		ch12[i] = a * b;
 	}
 
 	// μx, μy
@@ -104,8 +106,10 @@ double Metrics::calculate_ssim_rgb(const Image& img1, const Image& img2, int wid
 	std::vector<double> r1(N), g1(N), b1(N);
 	std::vector<double> r2(N), g2(N), b2(N);
 	for (int i = 0; i < N; i++) {
-		r1[i] = data1[i].r; g1[i] = data1[i].g; b1[i] = data1[i].b;
-		r2[i] = data2[i].r; g2[i] = data2[i].g; b2[i] = data2[i].b;
+		const Pixel& p1 = data1[i];
+		const Pixel& p2 = data2[i];
+		r1[i] = p1.r; g1[i] = p1.g; b1[i] = p1.b;
+		r2[i] = p2.r; g2[i] = p2.g; b2[i] = p2.b;
 	}
 
 	double ssim_r = calculate_ssim_single_channel(r1, r2, width, height, kernel1d);
@@ -147,14 +151,40 @@ std::vector<double> Metrics::convolve_channel(const std::vector<double>& channel
 	int half = ksize / 2;
 	int N = width * height;
 
+	std::vector<double> temp(N);
+	std::vector<double> result(N);
+
 	// Pass 1: horizontal
-	std::vector<double> temp(N, 0.0);
 	for (int y = 0; y < height; y++) {
 		int row = y * width;
-		for (int x = 0; x < width; x++) {
+
+		// Left border pixels (x < half)
+		for (int x = 0; x < half && x < width; x++) {
 			double acc = 0.0;
 			for (int k = 0; k < ksize; k++) {
-				int ix = std::clamp(x + k - half, 0, width - 1);
+				int ix = x + k - half;
+				if (ix < 0) ix = 0;
+				acc += kernel1d[k] * channel[row + ix];
+			}
+			temp[row + x] = acc;
+		}
+
+		// Interior pixels — no bounds checking needed
+		for (int x = half; x < width - half; x++) {
+			double acc = 0.0;
+			int base = row + x - half;
+			for (int k = 0; k < ksize; k++) {
+				acc += kernel1d[k] * channel[base + k];
+			}
+			temp[row + x] = acc;
+		}
+
+		// Right border pixels (x >= width - half)
+		for (int x = max(half, width - half); x < width; x++) {
+			double acc = 0.0;
+			for (int k = 0; k < ksize; k++) {
+				int ix = x + k - half;
+				if (ix >= width) ix = width - 1;
 				acc += kernel1d[k] * channel[row + ix];
 			}
 			temp[row + x] = acc;
@@ -162,12 +192,39 @@ std::vector<double> Metrics::convolve_channel(const std::vector<double>& channel
 	}
 
 	// Pass 2: vertical
-	std::vector<double> result(N, 0.0);
-	for (int y = 0; y < height; y++) {
+	// Top border rows (y < half)
+	for (int y = 0; y < half && y < height; y++) {
 		for (int x = 0; x < width; x++) {
 			double acc = 0.0;
 			for (int k = 0; k < ksize; k++) {
-				int iy = std::clamp(y + k - half, 0, height - 1);
+				int iy = y + k - half;
+				if (iy < 0) iy = 0;
+				acc += kernel1d[k] * temp[iy * width + x];
+			}
+			result[y * width + x] = acc;
+		}
+	}
+
+	// Interior rows — no bounds checking
+	for (int y = half; y < height - half; y++) {
+		for (int x = 0; x < width; x++) {
+			double acc = 0.0;
+			int base = (y - half) * width + x;
+			for (int k = 0; k < ksize; k++) {
+				acc += kernel1d[k] * temp[base];
+				base += width;
+			}
+			result[y * width + x] = acc;
+		}
+	}
+
+	// Bottom border rows (y >= height - half)
+	for (int y = max(half, height - half); y < height; y++) {
+		for (int x = 0; x < width; x++) {
+			double acc = 0.0;
+			for (int k = 0; k < ksize; k++) {
+				int iy = y + k - half;
+				if (iy >= height) iy = height - 1;
 				acc += kernel1d[k] * temp[iy * width + x];
 			}
 			result[y * width + x] = acc;

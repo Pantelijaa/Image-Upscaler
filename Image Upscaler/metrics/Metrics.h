@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include "../core/Image.h"
 
 class Metrics {
