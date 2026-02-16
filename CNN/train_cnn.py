@@ -86,7 +86,7 @@ def train(data_dir, train_minutes = 3, batch_size=128, lr=1e-4, val_split=0.2, s
 
 		if val_loss < best_val_loss:
 			best_val_loss = val_loss
-			torch.save(model.state_dict(), "CNN/best_srcnn.pth")
+			torch.save(model.state_dict(), "models/pth/best_srcnn.pth")
 			print(f"  -> saved best model (val_loss={best_val_loss:.6f})")
 	total = time.time() - start_time
 	print(f"Training complete. {epoch} epochs in {total:.1f}s. Best val_loss: {best_val_loss:.6f}")

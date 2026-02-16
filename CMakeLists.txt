@@ -17,9 +17,18 @@ message(STATUS "Python3 executable: ${Python3_EXECUTABLE}")
 # cmake --build . --target train_cnn
 add_custom_target(train_cnn
     COMMAND ${CMAKE_COMMAND} -E env PYTHONUNBUFFERED=1
-        ${Python3_EXECUTABLE} CNN/train_cnn.py
+        ${Python3_EXECUTABLE} -X utf8 CNN/train_cnn.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "Training SRCNN model"
+    USES_TERMINAL
+)
+
+# cmake --build . --target export_onnx
+add_custom_target(export_onnx
+    COMMAND ${CMAKE_COMMAND} -E env PYTHONUNBUFFERED=1
+        ${Python3_EXECUTABLE} -X utf8 CNN/export_onnx.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Exporting best SRCNN model to ONNX"
     USES_TERMINAL
 )
 
