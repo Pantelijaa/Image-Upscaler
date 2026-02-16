@@ -9,6 +9,7 @@
 #include "core/Scaler.h"
 #include "interpolation/IInterpolator.h"
 #include "interpolation/Bilinear.h"
+#include "interpolation/Bicubic.h"
 #include "metrics/Metrics.h"
 const std::string PATH_TO_DATA = "../../../../data/";
 const std::string PATH_TO_ORIGINALS = PATH_TO_DATA + "originals/";
@@ -23,7 +24,7 @@ int main()
 	std::map<std::string, Image> original_images;
 
 
-	IInterpolator* it = new Bilinear();
+	IInterpolator* it = new Bicubic();
 	for (const auto& entry : std::filesystem::directory_iterator(PATH_TO_ORIGINALS)) {
 		std::cout << entry.path() << std::endl;
 		Image img;
@@ -44,8 +45,8 @@ int main()
 		Image upscaledImg = Scaler::upscale(img, img.getWidth() * 2, img.getHeight() * 2, *it);
 		std::string filename = entry.path().filename().string();
 		std::cout << filename << "PSNR: " << Metrics::calculatePSNR(found->second, upscaledImg) << std::endl;
-		//std::cout << filename << "vs" << "SSIM: " << Metrics::calculateSSIM(*iter, upscaledImg) << std::endl
-		upscaledImg.saveToFile(PATH_TO_RESULTS + "upscaled_2x_" + filename);
+		std::cout << filename << "vs" << "SSIM: " << Metrics::calculateSSIM(found->second, upscaledImg) << std::endl;
+		upscaledImg.saveToFile(PATH_TO_RESULTS + "bicubic/upscaled_2x_" + filename);
 	}
 
 	for (const auto& entry : std::filesystem::directory_iterator(PATH_TO_DOWNSCALED_4x)) {
@@ -62,7 +63,7 @@ int main()
 		std::string filename = entry.path().filename().string();
 		std::cout << filename << "PSNR: " << Metrics::calculatePSNR(found->second, upscaledImg) << std::endl;
 		std::cout << filename << "SSIM: " << Metrics::calculateSSIM(found->second, upscaledImg) << std::endl;
-		upscaledImg.saveToFile(PATH_TO_RESULTS + "upscaled_4x_" + filename);
+		upscaledImg.saveToFile(PATH_TO_RESULTS + "bicubic/upscaled_4x_" + filename);
 	}
 
 	delete it;
