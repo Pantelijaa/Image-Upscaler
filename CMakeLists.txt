@@ -16,9 +16,11 @@ message(STATUS "Python3 executable: ${Python3_EXECUTABLE}")
 
 # cmake --build . --target train_cnn
 add_custom_target(train_cnn
-    COMMAND ${Python3_EXECUTABLE} CNN/train_cnn.py
+    COMMAND ${CMAKE_COMMAND} -E env PYTHONUNBUFFERED=1
+        ${Python3_EXECUTABLE} CNN/train_cnn.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "Training SRCNN model"
+    USES_TERMINAL
 )
 
 # Include sub-projects.
