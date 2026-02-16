@@ -14,7 +14,6 @@ Pixel& Image::at(int x, int y) {
 
 bool Image::loadFromFile(const std::string& filename) {
 	unsigned char* imgData = stbi_load(filename.c_str(), &width, &height, &channels, 3);
-	std::cout << std::filesystem::current_path() << std::endl; // error debugging
 	if (!imgData)
 		return false;
 	data.resize(width * height);

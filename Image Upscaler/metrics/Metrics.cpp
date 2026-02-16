@@ -1,6 +1,10 @@
 ﻿#include "Metrics.h"
 
 double Metrics::calculatePSNR(const Image& img1, const Image& img2) {
+	if (img1.getWidth() != img2.getWidth() || img1.getHeight() != img2.getHeight()) {
+		std::cerr << "Error: Images must be of the same dimensions for PSNR calculation." << std::endl;
+		return -1.0;
+	}
 	double mse = calculateMSE(img1, img2);
 	if (mse == 0) {
 		return INFINITY; // Images are identical
