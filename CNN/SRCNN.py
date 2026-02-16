@@ -3,7 +3,7 @@ import torch.nn as nn
 
 class SRCNN(nn.Module):
 	def __init__(self):
-		super(CNN, self).__init__()
+		super(SRCNN, self).__init__()
 
 		self.conv1 = nn.Conv2d(1, 64, kernel_size=9, padding=4)
 		self.conv2 = nn.Conv2d(64, 32, kernel_size=5, padding=2)
