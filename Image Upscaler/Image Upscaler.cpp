@@ -12,8 +12,8 @@
 #include "interpolation/Bicubic.h"
 #include "metrics/Metrics.h"
 const std::string PATH_TO_DATA = "../../../../data/";
+const std::string PATH_TO_RESULTS = "../../../../results/";
 const std::string PATH_TO_ORIGINALS = PATH_TO_DATA + "originals/";
-const std::string PATH_TO_RESULTS = PATH_TO_DATA + "results/";
 const std::string PATH_TO_DOWNSCALED = PATH_TO_DATA + "downscaled/";
 const std::string PATH_TO_DOWNSCALED_2x = PATH_TO_DOWNSCALED + "2x/";
 const std::string PATH_TO_DOWNSCALED_4x = PATH_TO_DOWNSCALED + "4x/";
