@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader, random_split
 from torchvision import transforms
 import os
 import time
+from export_onnx import export_onnx
 
 def train(data_dir, train_minutes = 3, batch_size=128, lr=1e-4, val_split=0.2, scale=2):
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -90,6 +91,9 @@ def train(data_dir, train_minutes = 3, batch_size=128, lr=1e-4, val_split=0.2, s
 			print(f"  -> saved best model (val_loss={best_val_loss:.6f})")
 	total = time.time() - start_time
 	print(f"Training complete. {epoch} epochs in {total:.1f}s. Best val_loss: {best_val_loss:.6f}")
+
+	onnx_path, version = export_onnx("models/pth/best_srcnn.pth", "models/onnx")
+	print(f"Ready for C++ inference: {onnx_path}", flush=True)
 
 
 if __name__ == "__main__":

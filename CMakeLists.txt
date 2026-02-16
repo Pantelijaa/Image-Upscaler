@@ -19,7 +19,7 @@ add_custom_target(train_cnn
     COMMAND ${CMAKE_COMMAND} -E env PYTHONUNBUFFERED=1
         ${Python3_EXECUTABLE} -X utf8 CNN/train_cnn.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Training SRCNN model"
+    COMMENT "Training SRCNN model and exporting to ONNX"
     USES_TERMINAL
 )
 
