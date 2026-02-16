@@ -1,8 +1,8 @@
 #include "Bilinear.h"
 
 Pixel Bilinear::interpolate(Image& img, float x, float y) {
-	int x1 = floor(x);
-	int y1 = floor(y);
+	int x1 = static_cast<int>(floor(x));
+	int y1 = static_cast<int>(floor(y));
 	int x2 = min(x1 + 1, img.getWidth() - 1);
 	int y2 = min(y1 + 1, img.getHeight() - 1);
 	float dx = x - x1;

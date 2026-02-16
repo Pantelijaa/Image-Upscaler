@@ -11,6 +11,7 @@
 #include "interpolation/Bilinear.h"
 #include "interpolation/Bicubic.h"
 #include "metrics/Metrics.h"
+#include "srcnn/SRCNNUpscaler.h"
 const std::string PATH_TO_DATA = "../../../../data/";
 const std::string PATH_TO_RESULTS = "../../../../results/";
 const std::string PATH_TO_ORIGINALS = PATH_TO_DATA + "originals/";
