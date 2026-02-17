@@ -8,10 +8,22 @@ import os
 import time
 from export_onnx import export_onnx
 
-def train(data_dir, train_minutes = 3, batch_size=64, lr=1e-3, val_split=0.2, scale=2):
+
+class CharbonnierLoss(nn.Module):
+	"""Smooth L1-like loss: sqrt((x-y)^2 + eps^2). Produces sharper results than MSE."""
+	def __init__(self, eps=1e-6):
+		super().__init__()
+		self.eps_sq = eps ** 2
+
+	def forward(self, pred, target):
+		diff = pred - target
+		return torch.mean(torch.sqrt(diff * diff + self.eps_sq))
+
+
+def train(data_dir, train_minutes = 30, batch_size=64, lr=1e-3, val_split=0.2, scale=2):
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 	print("\nLoading dataset...", flush=True)
-	dataset = SRDataset(data_dir, patch_size=33, scale=scale, stride=7)
+	dataset = SRDataset(data_dir, patch_size=33, scale=scale, stride=14)
 	val_size = int(len(dataset) * val_split)
 	train_size = len(dataset) - val_size
 	train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
@@ -21,7 +33,8 @@ def train(data_dir, train_minutes = 3, batch_size=64, lr=1e-3, val_split=0.2, sc
 
 	
 	model = SRCNN().to(device)
-	criterion = nn.MSELoss()
+	criterion = CharbonnierLoss().to(device)
+	mse_metric = nn.MSELoss()
 	optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
 	# Reduce LR when Validation loss plateaus
@@ -30,6 +43,7 @@ def train(data_dir, train_minutes = 3, batch_size=64, lr=1e-3, val_split=0.2, sc
 	)
 
 	best_val_loss = float("inf")
+	best_val_mse = float("inf")
 	epoch = 0
 	time_limit = train_minutes * 60
 
@@ -51,6 +65,7 @@ def train(data_dir, train_minutes = 3, batch_size=64, lr=1e-3, val_split=0.2, sc
 		epoch += 1
 		model.train()
 		train_loss = 0.0
+		train_mse = 0.0
 		for lr_patches, hr_patches in train_loader:
 			lr_patches = lr_patches.to(device, non_blocking=True)
 			hr_patches = hr_patches.to(device, non_blocking=True)
@@ -65,15 +80,19 @@ def train(data_dir, train_minutes = 3, batch_size=64, lr=1e-3, val_split=0.2, sc
 
 			optimizer.step()
 
-			train_loss += loss.item() * lr_patches.size(0)
+			n = lr_patches.size(0)
+			train_loss += loss.item() * n
+			train_mse += mse_metric(predictions, hr_patches).item() * n
 
 			if time.time() - start_time >= time_limit:
 				break
 
 		train_loss /= train_size
+		train_mse /= train_size
 
 		model.eval()
 		val_loss = 0.0
+		val_mse = 0.0
 		with torch.no_grad():
 			for lr_patches, hr_patches in val_loader:
 				lr_patches = lr_patches.to(device, non_blocking=True)
@@ -81,8 +100,11 @@ def train(data_dir, train_minutes = 3, batch_size=64, lr=1e-3, val_split=0.2, sc
 
 				predictions = model(lr_patches)
 				loss = criterion(predictions, hr_patches)
-				val_loss += loss.item() * lr_patches.size(0)
+				n = lr_patches.size(0)
+				val_loss += loss.item() * n
+				val_mse += mse_metric(predictions, hr_patches).item() * n
 		val_loss /= val_size
+		val_mse /= val_size
 
 		# Step scheduler based on valdiation loss
 		scheduler.step(val_loss)
@@ -93,7 +115,9 @@ def train(data_dir, train_minutes = 3, batch_size=64, lr=1e-3, val_split=0.2, sc
 		print(
 			f"Epoch {epoch}  ",
 			f"train_loss: {train_loss:.6f}  ",
+			f"train_mse: {train_mse:.6f}  ",
 			f"val_loss: {val_loss:.6f}  ",
+			f"val_mse: {val_mse:.6f}  ",
 			f"lr: {current_lr:.6f}  ",
 			f"[{elapsed:.0f}s elapsed, {remaining:.0f}s remaining]",
 			flush = True
@@ -101,10 +125,11 @@ def train(data_dir, train_minutes = 3, batch_size=64, lr=1e-3, val_split=0.2, sc
 
 		if val_loss < best_val_loss:
 			best_val_loss = val_loss
+			best_val_mse = val_mse
 			torch.save(model.state_dict(), "models/pth/best_srcnn.pth")
 			print(f"  -> saved best model (val_loss={best_val_loss:.6f})")
 	total = time.time() - start_time
-	print(f"Training complete. {epoch} epochs in {total:.1f}s. Best val_loss: {best_val_loss:.6f}")
+	print(f"Training complete. {epoch} epochs in {total:.1f}s. Best val_loss: {best_val_loss:.6f}. Best val_mse: {best_val_mse:.6f}")
 
 	onnx_path, version = export_onnx("models/pth/best_srcnn.pth", "models/onnx")
 	print(f"Ready for C++ inference: {onnx_path}", flush=True)
