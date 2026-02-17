@@ -11,7 +11,10 @@ from export_onnx import export_onnx
 def train(data_dir, train_minutes = 3, batch_size=64, lr=1e-3, val_split=0.2, scale=2):
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 	print("Loading dataset...", flush=True)
-	dataset = SRDataset(data_dir, patch_size=33, scale=scale, stride=14)
+	dataset_1x = SRDataset(data_dir, patch_size=33, scale=scale, stride=14)
+	dataset_1.5x = SRDataset(data_dir, patch_size=33, scale=scale*1.5, stride=14)
+	dataset_2x = SRDataset(data_dir, patch_size=33, scale=scale*2, stride=14)
+	dataset = ConcatDataset([dataset_1x, dataset_1.5x, dataset_2x])
 	val_size = int(len(dataset) * val_split)
 	train_size = len(dataset) - val_size
 	train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
@@ -22,11 +25,7 @@ def train(data_dir, train_minutes = 3, batch_size=64, lr=1e-3, val_split=0.2, sc
 	
 	model = SRCNN().to(device)
 	criterion = nn.MSELoss()
-	optimizer = torch.optim.Adam([
-		{"params": model.conv1.parameters(), "lr": lr},
-		{"params": model.conv2.parameters(), "lr": lr},
-		{"params": model.conv3.parameters(), "lr": lr * 0.1},
-	])
+	optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
 	# Reduce LR when Validation loss plateaus
 	scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -42,7 +41,7 @@ def train(data_dir, train_minutes = 3, batch_size=64, lr=1e-3, val_split=0.2, sc
 	print(f"    Batch size:     {batch_size}")
 	print(f"    Train patches:  {train_size}")
 	print(f"    Validation patches:	{val_size}")
-	print(f"    Learning rate:  {lr} (conv3: {lr * 0.1})")
+	print(f"    Learning rate:  {lr}")
 	print(f"    Train duration: {train_minutes} min", flush=True)
 
 	start_time = time.time()
