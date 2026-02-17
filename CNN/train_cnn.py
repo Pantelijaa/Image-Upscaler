@@ -22,7 +22,11 @@ def train(data_dir, train_minutes = 3, batch_size=64, lr=1e-3, val_split=0.2, sc
 	
 	model = SRCNN().to(device)
 	criterion = nn.MSELoss()
-	optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+	optimizer = torch.optim.Adam([
+		{"params": model.conv1.parameters(), "lr": lr},
+		{"params": model.conv2.parameters(), "lr": lr},
+		{"params": model.conv3.parameters(), "lr": lr * 0.1},
+	])
 	best_val_loss = float("inf")
 	epoch = 0
 	time_limit = train_minutes * 60
