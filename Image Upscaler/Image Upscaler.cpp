@@ -12,12 +12,14 @@
 #include "interpolation/Bicubic.h"
 #include "metrics/Metrics.h"
 #include "srcnn/SRCNNUpscaler.h"
+
 const std::string PATH_TO_DATA = "../../../../data/";
 const std::string PATH_TO_RESULTS = "../../../../results/";
 const std::string PATH_TO_ORIGINALS = PATH_TO_DATA + "originals/";
 const std::string PATH_TO_DOWNSCALED = PATH_TO_DATA + "downscaled/";
 const std::string PATH_TO_DOWNSCALED_2x = PATH_TO_DOWNSCALED + "2x/";
 const std::string PATH_TO_DOWNSCALED_4x = PATH_TO_DOWNSCALED + "4x/";
+const std::string PATH_TO_ONNX_MODELS = "../../../../models/onnx/";
 
 
 static std::string generate_key(std::string key);
@@ -73,13 +75,59 @@ static void run_upscale(
 		double ssim = Metrics::calculateSSIM(found->second, upscaledImg);
 
 		std::cout << "[" << method_name << " " << scale_label << "] " << filename
-			<< " - PSNR" << psnr << "dB"
+			<< " - PSNR " << psnr << "dB"
 			<< ", SSIM: " << ssim
 			<< ", Time: " << duration_ms << "ms\n";
 
 		results.push_back({ filename, method_name, scale_label, psnr, ssim, duration_ms });
 		upscaledImg.saveToFile(output_dir + "upscaled_" + scale_label + "-" + filename);
 	}
+}
+
+static void run_srcnn_upscale(
+	const std::filesystem::path& downscaled_dir,
+	const std::string& scale_label,
+	int scale_factor,
+	SRCNNUpscaler& srcnn,
+	std::map<std::string, Image>& original_images,
+	std::vector<MetricResult>& results)
+{
+	std::string method_name = srcnn.get_model_name();
+	std::string output_dir = PATH_TO_RESULTS + method_name + "/" + scale_label + "/";
+	std::filesystem::create_directories(output_dir);
+
+	for (const auto& entry : std::filesystem::directory_iterator(downscaled_dir)) {
+		std::string filename = entry.path().filename().string();
+		std::string key = generate_key(filename);
+		auto found = original_images.find(key);
+		if (found == original_images.end()) {
+			std::cerr << "Original not found for: " << key << std::endl;
+			continue;
+		}
+		Image img;
+		img.loadFromFile(entry.path().string());
+		auto start = std::chrono::high_resolution_clock::now();
+		Image upscaledImg = srcnn.upscale(img, scale_factor);
+		auto end = std::chrono::high_resolution_clock::now();
+		long long duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+		double psnr = Metrics::calculatePSNR(found->second, upscaledImg);
+		double ssim = Metrics::calculateSSIM(found->second, upscaledImg);
+
+		std::cout << "[" << method_name << " " << scale_label << "] " << filename
+			<< " - PSNR: " << psnr << "dB"
+			<< ", SSIM: " << ssim
+			<< ", Time: " << duration_ms << "ms\n";
+
+		results.push_back({ filename, method_name, scale_label, psnr, ssim, duration_ms });
+		upscaledImg.saveToFile(output_dir + "upscaled_" + scale_label + "-" + filename);
+	}
+}
+
+static std::string generate_key(std::string key) {
+	auto end_pos = key.find_last_of("_");
+	auto start_pos = key.find_last_of("/") + 1;
+	return key.substr(start_pos, end_pos);
 }
 
 int main()
@@ -113,15 +161,35 @@ int main()
 	for (auto& method : interpolation_methods) {
 		for (auto& scale : scales) {
 			std::cout << "\n===" << method.name << " " << scale.label << "===\n";
-			run_upscale(scale.path, scale.label, scale.factor, method.interpolator, method.name, original_images, all_results);
+			//run_upscale(scale.path, scale.label, scale.factor, method.interpolator, method.name, original_images, all_results);
 		}
 	}
 
-	return 0;
-}
+	if (std::filesystem::exists(PATH_TO_ONNX_MODELS)) {
+		std::vector<std::string> onnx_files;
+		for (const auto& entry : std::filesystem::directory_iterator(PATH_TO_ONNX_MODELS)) {
+			if (entry.path().extension() == ".onnx") {
+				onnx_files.push_back(entry.path().string());
+			}
+		}
+		std::sort(onnx_files.begin(), onnx_files.end());
 
-static std::string generate_key(std::string key) {
-	auto end_pos = key.find_last_of("_");
-	auto start_pos = key.find_last_of("/") + 1;
-	return key.substr(start_pos, end_pos);
+		for (const auto& onnx_path : onnx_files) {
+			try {
+				SRCNNUpscaler srcnn(onnx_path);
+				std::cout << "\n=== SRCNN [" << srcnn.get_model_name() << "] ===\n";
+				for (auto& scale : scales) {
+					run_srcnn_upscale(scale.path, scale.label, scale.factor, srcnn, original_images, all_results);
+				}
+			} 
+			catch (const std::exception& e) {
+				std::cerr << "Failed to load ONNX model " << onnx_path << ": " << e.what() << std::endl;
+			}
+		}
+
+	} else {
+		std::cout << "\nNo ONNX models found in " << PATH_TO_ONNX_MODELS << std::endl;
+	}
+
+	return 0;
 }
