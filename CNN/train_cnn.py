@@ -27,6 +27,12 @@ def train(data_dir, train_minutes = 3, batch_size=64, lr=1e-3, val_split=0.2, sc
 		{"params": model.conv2.parameters(), "lr": lr},
 		{"params": model.conv3.parameters(), "lr": lr * 0.1},
 	])
+
+	# Reduce LR when Validation loss plateaus
+	scheduler = torch.optim.lr_scheduler.ReduceLROnPlateu(
+		optimizer, mode="min", factor=0.5, patience=10, verbose=True
+	)
+
 	best_val_loss = float("inf")
 	epoch = 0
 	time_limit = train_minutes * 60
@@ -36,7 +42,7 @@ def train(data_dir, train_minutes = 3, batch_size=64, lr=1e-3, val_split=0.2, sc
 	print(f"    Batch size:     {batch_size}")
 	print(f"    Train patches:  {train_size}")
 	print(f"    Validation patches:	{val_size}")
-	print(f"    Learning rate:  {lr}")
+	print(f"    Learning rate:  {lr} (conv3: {lr * 0.1})")
 	print(f"    Train duration: {train_minutes} min", flush=True)
 
 	start_time = time.time()
