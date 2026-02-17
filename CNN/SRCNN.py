@@ -11,7 +11,7 @@ class SRCNN(nn.Module):
 		self.relu = nn.ReLU(inplace=True)
 
 	def forward(self, x):
-		relsidual = x
+		residual = x
 		out = self.relu(self.conv1(x))
 		out = self.relu(self.conv2(out))
 		out = self.conv3(out)

@@ -11,7 +11,7 @@ from export_onnx import export_onnx
 def train(data_dir, train_minutes = 3, batch_size=64, lr=1e-3, val_split=0.2, scale=2):
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 	print("Loading dataset...", flush=True)
-	dataset = SRDataset(data_dir, patch_size=33, scale=scale, stride=7)
+	dataset = SRDataset(data_dir, patch_size=33, scale=scale, stride=14)
 	val_size = int(len(dataset) * val_split)
 	train_size = len(dataset) - val_size
 	train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
@@ -27,7 +27,7 @@ def train(data_dir, train_minutes = 3, batch_size=64, lr=1e-3, val_split=0.2, sc
 	epoch = 0
 	time_limit = train_minutes * 60
 
-	print(f"\n\tDevice:         {device}")
+	print(f"\n  Device:         {device}")
 	print(f"    Scale factor:   {scale}x")
 	print(f"    Batch size:     {batch_size}")
 	print(f"    Train patches:  {train_size}")

@@ -26,7 +26,7 @@ class SRDataset(Dataset):
 
 			augumented = self._augument(img)
 
-			for augumented_image in augumented
+			for augumented_image in augumented:
 				self._extract_patches(augumented_image, stride)
 
 		
