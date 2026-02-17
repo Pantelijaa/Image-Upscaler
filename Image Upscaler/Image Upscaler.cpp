@@ -44,6 +44,14 @@ struct ScaleConfig {
 	int factor;
 };
 
+// Compute averages per (method, scale)
+struct Accumulator {
+	double psnr_sum = 0.0;
+	double ssim_sum = 0.0;
+	long long time_sum = 0;
+	int count = 0;
+};
+
 static void run_upscale(
 	const std::filesystem::path& downscaled_dir,
 	const std::string& scale_label,
@@ -130,6 +138,88 @@ static std::string generate_key(std::string key) {
 	return key.substr(start_pos, end_pos);
 }
 
+static void print_summary(const std::vector<MetricResult>& results) {
+	constexpr int col_file = 25;
+	constexpr int col_method = 20;
+	constexpr int col_scale = 7;
+	constexpr int col_psnr = 12;
+	constexpr int col_ssim = 10;
+	constexpr int col_time = 10;
+	constexpr int total_width = col_file + col_method + col_scale + col_psnr + col_ssim + col_time + 7;
+
+	auto separator = [&]() {
+		std::cout << std::string(total_width, '-') << "\n";
+		};
+
+	std::cout << "\n\n";
+	separator();
+	std::cout << "  SUMMARY OF RESULTS\n";
+	separator();
+
+	std::cout << "| " << std::left
+		<< std::setw(col_file) << "Filename"
+		<< std::setw(col_method) << "Method"
+		<< std::setw(col_scale) << "Scale"
+		<< std::setw(col_psnr) << "PSNR (dB)"
+		<< std::setw(col_ssim) << "SSIM"
+		<< std::setw(col_time) << "Time (ms)"
+		<< " |\n";
+	separator();
+
+	for (const auto& r : results) {
+		std::cout << "| " << std::left
+			<< std::setw(col_file) << r.filename
+			<< std::setw(col_method) << r.method
+			<< std::setw(col_scale) << r.scale
+			<< std::setw(col_psnr) << std::fixed << std::setprecision(2) << r.psnr
+			<< std::setw(col_ssim) << std::fixed << std::setprecision(4) << r.ssim
+			<< std::setw(col_time) << r.time_ms
+			<< " |\n";
+	}
+
+	separator();
+
+	std::map<std::string, Accumulator> averages;
+	for (const auto& r : results) {
+		std::string group = r.method + " | " + r.scale;
+		auto& acc = averages[group];
+		acc.psnr_sum += r.psnr;
+		acc.ssim_sum += r.ssim;
+		acc.time_sum += r.time_ms;
+		acc.count++;
+	}
+
+	std::cout << "\n";
+	separator();
+	std::cout << "  AVERAGES PER METHOD\n";
+	separator();
+
+	std::cout << "| " << std::left
+		<< std::setw(col_file + col_method) << "Method / Scale"
+		<< std::setw(col_scale) << "Count"
+		<< std::setw(col_psnr) << "Avg PSNR"
+		<< std::setw(col_ssim) << "Avg SSIM"
+		<< std::setw(col_time) << "Avg Time"
+		<< " |\n";
+	separator();
+
+	for (const auto& [group, acc] : averages) {
+		double avg_psnr = acc.psnr_sum / acc.count;
+		double avg_ssim = acc.ssim_sum / acc.count;
+		long long avg_time = acc.time_sum / acc.count;
+
+		std::cout << "| " << std::left
+			<< std::setw(col_file + col_method) << group
+			<< std::setw(col_scale) << acc.count
+			<< std::setw(col_psnr) << std::fixed << std::setprecision(2) << avg_psnr
+			<< std::setw(col_ssim) << std::fixed << std::setprecision(4) << avg_ssim
+			<< std::setw(col_time) << avg_time
+			<< " |\n";
+	}
+
+	separator();
+}
+
 int main()
 {
 	std::map<std::string, Image> original_images;
@@ -190,6 +280,8 @@ int main()
 	} else {
 		std::cout << "\nNo ONNX models found in " << PATH_TO_ONNX_MODELS << std::endl;
 	}
+
+	print_summary(all_results);
 
 	return 0;
 }
