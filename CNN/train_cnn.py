@@ -29,7 +29,7 @@ def train(data_dir, train_minutes = 3, batch_size=64, lr=1e-3, val_split=0.2, sc
 	])
 
 	# Reduce LR when Validation loss plateaus
-	scheduler = torch.optim.lr_scheduler.ReduceLROnPlateu(
+	scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
 		optimizer, mode="min", factor=0.5, patience=10, verbose=True
 	)
 
@@ -56,14 +56,17 @@ def train(data_dir, train_minutes = 3, batch_size=64, lr=1e-3, val_split=0.2, sc
 		model.train()
 		train_loss = 0.0
 		for lr_patches, hr_patches in train_loader:
-			lr_patches = lr_patches.to(device)
-			hr_patches = hr_patches.to(device)
+			lr_patches = lr_patches.to(device, non_blocking=True)
+			hr_patches = hr_patches.to(device, non_blocking=True)
 
 			predictions = model(lr_patches)
 			loss = criterion(predictions, hr_patches)
 
 			optimizer.zero_grad()
 			loss.backward()
+
+			torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.1)
+
 			optimizer.step()
 
 			train_loss += loss.item() * lr_patches.size(0)
@@ -77,20 +80,25 @@ def train(data_dir, train_minutes = 3, batch_size=64, lr=1e-3, val_split=0.2, sc
 		val_loss = 0.0
 		with torch.no_grad():
 			for lr_patches, hr_patches in val_loader:
-				lr_patches = lr_patches.to(device)
-				hr_patches = hr_patches.to(device)
+				lr_patches = lr_patches.to(device, non_blocking=True)
+				hr_patches = hr_patches.to(device, non_blocking=True)
 
 				predictions = model(lr_patches)
 				loss = criterion(predictions, hr_patches)
 				val_loss += loss.item() * lr_patches.size(0)
 		val_loss /= val_size
 
+		# Step scheduler based on valdiation loss
+		scheduler.step(val_loss)
+
 		elapsed = time.time() - start_time
 		remaining = max(0, time_limit - elapsed)
+		current_lr = optimizer.param_groups[0]["lr"]
 		print(
 			f"Epoch {epoch}  ",
 			f"train_loss: {train_loss:.6f}  ",
 			f"val_loss: {val_loss:.6f}  ",
+			f"lr: {current_lr:.6f}  ",
 			f"[{elapsed:.0f}s elapsed, {remaining:.0f}s remaining]",
 			flush = True
 		)
