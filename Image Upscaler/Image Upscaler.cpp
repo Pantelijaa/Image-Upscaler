@@ -161,7 +161,7 @@ int main()
 	for (auto& method : interpolation_methods) {
 		for (auto& scale : scales) {
 			std::cout << "\n===" << method.name << " " << scale.label << "===\n";
-			//run_upscale(scale.path, scale.label, scale.factor, method.interpolator, method.name, original_images, all_results);
+			run_upscale(scale.path, scale.label, scale.factor, method.interpolator, method.name, original_images, all_results);
 		}
 	}
 

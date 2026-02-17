@@ -56,6 +56,12 @@ target_link_libraries(CMakeTarget PRIVATE
     $<IF:$<CONFIG:Debug>,opencv_world4120d,opencv_world4120>
 )
 
+# Enable OpenMP for parallel SSIM computation
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(CMakeTarget PRIVATE OpenMP::OpenMP_CXX)
+endif()
+
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET CMakeTarget PROPERTY CXX_STANDARD 20)
 endif()
