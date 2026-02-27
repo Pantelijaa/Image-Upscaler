@@ -103,7 +103,6 @@ static void run_srcnn_upscale(
 	std::string method_name = srcnn.get_model_name();
 	std::string output_dir = PATH_TO_RESULTS + method_name + "/" + scale_label + "/";
 	std::filesystem::create_directories(output_dir);
-
 	for (const auto& entry : std::filesystem::directory_iterator(downscaled_dir)) {
 		std::string filename = entry.path().filename().string();
 		std::string key = generate_key(filename);
