@@ -13,7 +13,6 @@ double Metrics::calculatePSNR(const Image& img1, const Image& img2) {
 }
 
 /**
-Single channel SSIM:
 SSIM formula: SSIM(x, y) = ((2 * μx * μy + C1) * (2 * σxy + C2)) / ((μx^2 + μy^2 + C1) * (σx^2 + σy^2 + C2))
 */
 double Metrics::calculateSSIM(const Image& img1, const Image& img2) {

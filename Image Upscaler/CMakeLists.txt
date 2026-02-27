@@ -35,6 +35,17 @@ set(OPENCV_INCLUDE_DIR "${OPENCV_BUILD_DIR}/include")
 set(OPENCV_LIB_DIR "${OPENCV_BUILD_DIR}/x64/vc16/lib")
 set(OPENCV_BIN_DIR "${OPENCV_BUILD_DIR}/x64/vc16/bin")
 
+# --- ONNX Runtime ---
+set(ORT_VERSION "1.21.0")
+FetchContent_Declare(
+    onnxruntime
+    URL "https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-win-x64-${ORT_VERSION}.zip"
+)
+FetchContent_MakeAvailable(onnxruntime)
+set(ORT_ROOT "${onnxruntime_SOURCE_DIR}")
+set(ORT_INCLUDE "${ORT_ROOT}/include")
+set(ORT_LIB_DIR "${ORT_ROOT}/lib")
+
 # Add source to this project's executable.
 add_executable (CMakeTarget
     "Image Upscaler.cpp"
@@ -48,19 +59,14 @@ add_executable (CMakeTarget
     "srcnn/SRCNNUpscaler.h" "srcnn/SRCNNUpscaler.cpp"
 )
 
-target_include_directories(CMakeTarget PRIVATE "${OPENCV_INCLUDE_DIR}")
-target_link_directories(CMakeTarget PRIVATE "${OPENCV_LIB_DIR}")
+target_include_directories(CMakeTarget PRIVATE "${OPENCV_INCLUDE_DIR}" "${ORT_INCLUDE}")
+target_link_directories(CMakeTarget PRIVATE "${OPENCV_LIB_DIR}" "${ORT_LIB_DIR}")
 
 # Link debug lib (d suffix) for Debug builds, release lib otherwise
 target_link_libraries(CMakeTarget PRIVATE
     $<IF:$<CONFIG:Debug>,opencv_world4120d,opencv_world4120>
+    onnxruntime
 )
-
-# Enable OpenMP for parallel SSIM computation
-find_package(OpenMP)
-if(OpenMP_CXX_FOUND)
-    target_link_libraries(CMakeTarget PRIVATE OpenMP::OpenMP_CXX)
-endif()
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET CMakeTarget PROPERTY CXX_STANDARD 20)
@@ -69,6 +75,14 @@ endif()
 # Copy OpenCV DLLs next to the executable
 file(GLOB OPENCV_DLLS "${OPENCV_BIN_DIR}/*.dll")
 foreach(dll ${OPENCV_DLLS})
+    add_custom_command(TARGET CMakeTarget POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${dll}" $<TARGET_FILE_DIR:CMakeTarget>
+    )
+endforeach()
+
+# Copy ONNX Runtime DLL next to the executable
+file(GLOB ORT_DLLS "${ORT_LIB_DIR}/*.dll")
+foreach(dll ${ORT_DLLS})
     add_custom_command(TARGET CMakeTarget POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${dll}" $<TARGET_FILE_DIR:CMakeTarget>
     )
