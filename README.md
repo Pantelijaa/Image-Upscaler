@@ -1,6 +1,6 @@
 # Image Upscaler
 
-A C++ image super-resolution playground that compares classical interpolation methods (**Bilinear**, **Bicubic**) against a **CNN-based SRCNN model** (trained in Python/PyTorch, exported to ONNX, and run in C++ via ONNX Runtime).
+A C++ image super-resolution playground that compares classical interpolation methods (**Bilinear**, **Bicubic**) against **learned CNN models** — the original three-layer **SRCNN** and a deeper **VDSR-style residual network** — trained in Python/PyTorch, exported to ONNX, and run in C++ via ONNX Runtime.
 
 The project measures upscaling quality using **PSNR** and **SSIM**, and reports per-image and per-method timing so the different approaches can be compared side by side.
 
@@ -10,14 +10,14 @@ Enlarging a photo by classical scaling introduces pixels that don't exist in the
 Two families of approaches are compared:
 
 - **Classical interpolation** — deterministic, per-pixel weighted averaging of neighboring pixels (**Bilinear**, **Bicubic**).
-- **Learned reconstruction** — a **Convolutional Neural Network (SRCNN)** trained to map low-resolution patches to high-resolution ones.
+- **Learned reconstruction** — **Convolutional Neural Networks** (SRCNN, VDSR-style) trained to map low-resolution patches to high-resolution ones.
 
 Both color (RGB) and grayscale images are supported, since a pixel is represented either as a `(R, G, B)` triple or a single intensity value.
 
 ## Overview
 
 - **Classical interpolation** (`Bilinear`, `Bicubic`) is implemented from scratch in C++.
-- **SRCNN** models are trained in Python using PyTorch, exported to ONNX, and can be hot swapped simply by dropping new `.onnx` files into the models folder — every model found is automatically benchmarked.
+- **CNN models** (SRCNN and a VDSR-style net, see `CNN/models.py`) are trained in Python using PyTorch, exported to ONNX, and can be hot swapped simply by dropping new `.onnx` files into the models folder — every model found is automatically benchmarked.
 - Image I/O is handled with [`stb_image`](Image%20Upscaler/includes/stb_image.h) / [`stb_image_write`](Image%20Upscaler/includes/stb_image_write.h).
 - Inference uses **ONNX Runtime**, and channel conversion/resizing uses **OpenCV**.
 - Both dependencies (OpenCV and ONNX Runtime) are fetched automatically by CMake — no manual installation required.
@@ -48,12 +48,12 @@ Image Upscaler/
 └── includes/                 # stb_image / stb_image_write (public domain)
 
 CNN/
-├── SRCNN.py                  # PyTorch SRCNN model definition
+├── models.py                  # Architectures: SRCNN (9-5-5) and VDSR-style residual net, picked by name
 ├── SRDataset.py               # Patch-based training dataset (augmentation + downscale/upscale pairs)
-├── train_cnn.py               # Training loop, saves the best checkpoint to models/pth/
-└── export_onnx.py             # Exports a trained checkpoint to models/onnx/srcnn_vN.onnx
+├── train_cnn.py               # Training loop (--arch srcnn|vdsr), saves the best checkpoint to models/pth/
+└── export_onnx.py             # Exports trained checkpoints to models/onnx/<arch>_vN.onnx
 
-CMakeLists.txt                 # Top-level project, defines the train_cnn / export_onnx targets
+CMakeLists.txt                 # Top-level project, defines the train_* / export_onnx targets
 Image Upscaler/CMakeLists.txt  # Builds the C++ executable, fetches OpenCV + ONNX Runtime
 ```
 
@@ -89,12 +89,20 @@ w(x) = 0                                     otherwise
 
 `a` is typically `-0.5` (Catmull-Rom spline).
 
-### SRCNN (Super-Resolution CNN)
+### Learned models (CNN)
 
-A Convolutional Neural Network trained to learn the mapping from a low-resolution image to its high-resolution counterpart:
+Convolutional Neural Networks trained to learn the mapping from a low-resolution image to its high-resolution counterpart. Two architectures are available in `CNN/models.py` and selected by name (`--arch`):
 
-- Built and trained in **PyTorch**, using **MSE loss** and the **Adam** optimizer.
-- Input: a low-resolution patch; output: the reconstructed high-resolution patch (residual learning — the network predicts the residual added back onto the interpolated input, see `CNN/SRCNN.py`).
+| Name | Architecture | Params | Reference |
+|---|---|---|---|
+| `srcnn` | 3 conv layers, 9×9 → 5×5 → 5×5 kernels, 64 and 32 feature maps, no skip connection | ~57k | Dong et al., *Image Super-Resolution Using Deep Convolutional Networks*, 2014 |
+| `vdsr` | 8 conv layers, 3×3 kernels, 64 feature maps, **residual learning** (the net predicts the correction added to the bicubic input). A shallower variant of the 20-layer original. | ~223k | Kim et al., *Accurate Image Super-Resolution Using Very Deep Convolutional Networks*, 2016 |
+
+Common to both:
+
+- Input: a single-channel (luminance) patch that has already been enlarged to the target size with bicubic interpolation; output: the reconstructed patch of the same size.
+- Trained in **PyTorch** with **MSE loss** and the **Adam** optimizer. SRCNN uses a 10× smaller learning rate for its reconstruction layer, as in the paper.
+- Checkpoints (`models/pth/best_<arch>.pth`) store the architecture name and configuration alongside the weights, so `export_onnx.py` can rebuild any model without extra arguments.
 - After training, the model is evaluated on images that were **not** part of the training set, to check that it generalizes rather than memorizes.
 - **Inference on new images happens in C++ via ONNX Runtime**, after exporting the trained checkpoint to `.onnx`.
 
@@ -112,12 +120,17 @@ This project is designed to be opened directly in **Visual Studio** as a CMake p
 1. Open the folder in Visual Studio and let it configure the CMake cache (this fetches OpenCV and ONNX Runtime on first run).
 2. In the **CMake Targets View**, you'll see the project laid out as:
    - `CMakeTarget` — the C++ executable (the upscaler/benchmark itself)
-   - `train_cnn` — trains a new SRCNN model
-   - `export_onnx` — exports an already-trained checkpoint to ONNX
+   - `train_srcnn` / `train_vdsr` — trains a new model of that architecture
+   - `train_cnn` — trains the architecture chosen by the `SR_ARCH` CMake cache variable (default `vdsr`)
+   - `export_onnx` — exports every already-trained checkpoint in `models/pth/` to ONNX
 
    ![CMake Targets View](results/CMakeTargets.png)
 
-3. **(Optional) Train a model:** Right-click `train_cnn` → **Build**. This runs `CNN/train_cnn.py`, which trains SRCNN for a fixed time budget and saves the best checkpoint to `models/pth/best_srcnn.pth`, then automatically exports it to `models/onnx/`.
+3. **(Optional) Train a model:** Right-click `train_srcnn` or `train_vdsr` → **Build**. This runs `CNN/train_cnn.py`, which trains the chosen network for a fixed time budget, saves the best checkpoint to `models/pth/best_<arch>.pth`, then automatically exports it to `models/onnx/<arch>_vN.onnx`. From a terminal, the script takes more options:
+
+   ```
+   python CNN/train_cnn.py --arch srcnn --minutes 60 --scale 2 --batch-size 64 --lr 1e-4
+   ```
 4. **Run the benchmark:** Set `CMakeTarget` as the startup item and run it. It will:
    - Load every image in `data/originals`
    - Upscale the corresponding downscaled versions using Bilinear, Bicubic, and every `.onnx` model found in `models/onnx/`
@@ -133,7 +146,7 @@ data/
     ├── 2x/              # Originals downscaled to 512x512
     └── 4x/              # Originals downscaled to 256x256
 models/
-└── onnx/                # Trained SRCNN models (srcnn_v1.onnx, srcnn_v2.onnx, ...)
+└── onnx/                # Trained models, named <arch>_vN.onnx (srcnn_v1.onnx, vdsr_v1.onnx, ...)
 ```
 
 Filenames in `downscaled/` are matched back to their originals using a shared prefix (see `generate_key` in `Image Upscaler.cpp`), so keep naming consistent, e.g. `input1_2x.jpg` ↔ `input1.jpg`.
@@ -156,7 +169,9 @@ The resulting 1024×1024 images are then compared against the original 1024×102
 
 ## Results
 
-Below is a sample run comparing Bilinear, Bicubic, and two SRCNN checkpoints (`srcnn_v1`, `srcnn_v2`) across 10 test images at 2x and 4x.
+Below is a sample run comparing Bilinear, Bicubic, and two CNN checkpoints (`srcnn_v1`, `srcnn_v2`) across 10 test images at 2x and 4x.
+
+> **Note:** the two checkpoints in this run were trained with the 8-layer residual network, which is now named `vdsr` in `CNN/models.py` (the ONNX files were renamed to `vdsr_v1.onnx` / `vdsr_v2.onnx`). They are *not* the 3-layer SRCNN; a run with the real `srcnn` architecture is still to be added.
 
 ### Per-image results
 
@@ -168,9 +183,9 @@ Below is a sample run comparing Bilinear, Bicubic, and two SRCNN checkpoints (`s
 
 **Takeaways from this run:**
 
-- Both SRCNN models clearly outperform classical interpolation on **PSNR and SSIM** at both scale factors, with the largest gains visible at **2x** (~34.5 dB vs. ~32.8–32.9 dB for Bilinear/Bicubic).
+- Both CNN checkpoints clearly outperform classical interpolation on **PSNR and SSIM** at both scale factors, with the largest gains visible at **2x** (~34.5 dB vs. ~32.8–32.9 dB for Bilinear/Bicubic).
 - **Bilinear** is by far the fastest (~190 ms average), while **Bicubic** costs roughly 10x more time for a comparable or only slightly better result than Bilinear.
-- **SRCNN** models sit in between on runtime (~1.3 s average) but deliver the best quality by a clear margin, making them the best trade-off when quality matters more than raw speed.
+- The **CNN** models sit in between on runtime (~1.3 s average) but deliver the best quality by a clear margin, making them the best trade-off when quality matters more than raw speed.
 
 *(Numbers above come from a specific run and will vary depending on the dataset, training duration, and hardware.)*
 

@@ -15,21 +15,35 @@ project ("Image Upscaler")
 find_package (Python3 REQUIRED)
 message(STATUS "Python3 executable: ${Python3_EXECUTABLE}")
 
-# cmake --build . --target train_cnn
+set(SR_ARCH "vdsr" CACHE STRING "Architecture for the train_cnn target (srcnn or vdsr), see CNN/models.py")
+set_property(CACHE SR_ARCH PROPERTY STRINGS srcnn vdsr)
+
+# cmake --build . --target train_cnn        (uses SR_ARCH)
 add_custom_target(train_cnn
     COMMAND ${CMAKE_COMMAND} -E env PYTHONUNBUFFERED=1
-        ${Python3_EXECUTABLE} -X utf8 CNN/train_cnn.py
+        ${Python3_EXECUTABLE} -X utf8 CNN/train_cnn.py --arch ${SR_ARCH}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Training SRCNN model and exporting to ONNX"
+    COMMENT "Training ${SR_ARCH} model and exporting to ONNX"
     USES_TERMINAL
 )
 
-# cmake --build . --target export_onnx
+# cmake --build . --target train_srcnn / train_vdsr
+foreach(arch srcnn vdsr)
+    add_custom_target(train_${arch}
+        COMMAND ${CMAKE_COMMAND} -E env PYTHONUNBUFFERED=1
+            ${Python3_EXECUTABLE} -X utf8 CNN/train_cnn.py --arch ${arch}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Training ${arch} model and exporting to ONNX"
+        USES_TERMINAL
+    )
+endforeach()
+
+# cmake --build . --target export_onnx     (exports every models/pth/best_*.pth)
 add_custom_target(export_onnx
     COMMAND ${CMAKE_COMMAND} -E env PYTHONUNBUFFERED=1
         ${Python3_EXECUTABLE} -X utf8 CNN/export_onnx.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Exporting best SRCNN model to ONNX"
+    COMMENT "Exporting trained checkpoints to ONNX"
     USES_TERMINAL
 )
 
