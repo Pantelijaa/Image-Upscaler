@@ -29,11 +29,11 @@ def verify(onnx_path):
 	print("  Inference OK")
 
 
-def get_next_version(onnx_dir, arch):
-	existing = glob.glob(os.path.join(onnx_dir, f"{arch}_v*.onnx"))
+def get_next_version(onnx_dir, stem):
+	existing = glob.glob(os.path.join(onnx_dir, f"{stem}_v*.onnx"))
 	versions = []
 	for path in existing:
-		match = re.search(rf"{re.escape(arch)}_v(\d+)\.onnx$", os.path.basename(path))
+		match = re.search(rf"{re.escape(stem)}_v(\d+)\.onnx$", os.path.basename(path))
 		if match:
 			versions.append(int(match.group(1)))
 	return max(versions, default=0) + 1
@@ -46,8 +46,9 @@ def export_onnx(weights_path, output_dir="models/onnx", patch_size=33):
 	model.eval()
 	arch = ckpt["arch"]
 
-	version = get_next_version(output_dir, arch)
-	onnx_path = os.path.join(output_dir, f"{arch}_v{version}.onnx")
+	stem = f"{arch}_x{ckpt['scale']}"  # <arch>_x<scale>_vN.onnx: the benchmark runs the model at this scale only
+	version = get_next_version(output_dir, stem)
+	onnx_path = os.path.join(output_dir, f"{stem}_v{version}.onnx")
 
 	dummy_input = torch.randn(1, 1, patch_size, patch_size)
 

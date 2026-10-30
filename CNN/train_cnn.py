@@ -36,7 +36,7 @@ def train(data_dir, arch="vdsr", train_minutes=60, batch_size=64, lr=None, val_s
 	)
 
 	os.makedirs("models/pth", exist_ok=True)
-	checkpoint_path = f"models/pth/best_{arch}.pth"
+	checkpoint_path = f"models/pth/best_{arch}_x{scale}.pth"
 
 	best_val_loss = float("inf")
 	epoch = 0
