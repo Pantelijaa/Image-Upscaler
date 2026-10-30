@@ -118,8 +118,9 @@ static void run_method(
 			continue;
 		}
 
-		double psnr = Metrics::calculatePSNR(found->second, upscaled);
-		double ssim = Metrics::calculateSSIM(found->second, upscaled);
+		// Y channel, `scale` border pixels shaved: the convention in SR papers
+		double psnr = Metrics::calculatePSNR(found->second, upscaled, scale);
+		double ssim = Metrics::calculateSSIM(found->second, upscaled, scale);
 
 		std::cout << "  " << std::left << std::setw(28) << filename
 			<< " PSNR " << std::fixed << std::setprecision(2) << psnr << " dB"
@@ -201,8 +202,11 @@ static void print_summary(const std::vector<MetricResult>& results) {
 	separator();
 }
 
-int main()
+// Usage: CMakeTarget.exe [Set ...]   e.g. `CMakeTarget.exe Set5 Set14` runs only those test sets
+int main(int argc, char* argv[])
 {
+	std::vector<std::string> only_datasets(argv + 1, argv + argc);
+
 	// --- Methods -----------------------------------------------------------
 	Bilinear bilinear;
 	Bicubic bicubic;
@@ -247,9 +251,14 @@ int main()
 
 	std::vector<fs::path> datasets;
 	for (const auto& entry : fs::directory_iterator(PATH_TO_TEST)) {
-		if (entry.is_directory() && fs::exists(entry.path() / "HR")) {
-			datasets.push_back(entry.path());
+		if (!entry.is_directory() || !fs::exists(entry.path() / "HR")) {
+			continue;
 		}
+		std::string name = entry.path().filename().string();
+		if (!only_datasets.empty() && std::find(only_datasets.begin(), only_datasets.end(), name) == only_datasets.end()) {
+			continue;
+		}
+		datasets.push_back(entry.path());
 	}
 	std::sort(datasets.begin(), datasets.end());
 

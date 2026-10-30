@@ -13,21 +13,22 @@ Pixel Bilinear::interpolate(Image& img, float x, float y) {
 	Pixel p12 = img.at(x1, y2);
 	Pixel p22 = img.at(x2, y2);
 
+	// + 0.5 rounds to nearest instead of truncating
 	Pixel result;
 	result.r = static_cast<unsigned char>(
 		(p11.r * (1 - dx) * (1 - dy)) +
 		(p21.r * dx * (1 - dy)) +
 		(p12.r * (1 - dx) * dy) +
-		(p22.r * dx * dy));
+		(p22.r * dx * dy) + 0.5f);
 	result.g = static_cast<unsigned char>(
 		(p11.g * (1 - dx) * (1 - dy)) +
 		(p21.g * dx * (1 - dy)) +
 		(p12.g * (1 - dx) * dy) +
-		(p22.g * dx * dy));
+		(p22.g * dx * dy) + 0.5f);
 	result.b = static_cast<unsigned char>(
 		(p11.b * (1 - dx) * (1 - dy)) +
 		(p21.b * dx * (1 - dy)) +
 		(p12.b * (1 - dx) * dy) +
-		(p22.b * dx * dy));
+		(p22.b * dx * dy) + 0.5f);
 	return result;
 }

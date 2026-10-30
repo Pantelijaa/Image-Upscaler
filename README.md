@@ -72,6 +72,8 @@ P  = f(x, y)  = ((y2 - y) / (y2 - y1)) * R1     + ((y - y1) / (y2 - y1)) * R2
 
 This uses the 4 nearest neighboring pixels (`Q11`, `Q21`, `Q12`, `Q22`) around the target point.
 
+Both interpolators are driven by the same resampling loop (`core/Scaler.cpp`), which uses **pixel-centre alignment**: destination pixel `x` samples the source at `(x + 0.5) · ratio − 0.5`, the same convention as OpenCV, Pillow and MATLAB. Sanity check on Set5: our bicubic gives 33.68 dB at 2x and 28.43 dB at 4x, against 33.66 / 28.42 dB reported in the literature.
+
 ### Bicubic interpolation
 
 Bicubic interpolation uses a 4×4 neighborhood (16 pixels) instead of 4, trading extra computation time for higher precision and sharper results:
@@ -138,6 +140,8 @@ This project is designed to be opened directly in **Visual Studio** as a CMake p
    - Upscale each `LR_x2` / `LR_x4` image using Bilinear, Bicubic, and every `.onnx` model found in `models/onnx/`
    - Compute PSNR/SSIM against the `HR` images, write every per-image result to `results/results.csv` and print an averages table grouped by dataset, scale and method
    - Save all upscaled images to `results/<Set>/<Method>/x<scale>/`
+
+   To run only some test sets, pass their names as arguments, e.g. `CMakeTarget.exe Set5 Set14` (in Visual Studio: project properties → Debugging → Command Arguments).
 
 ### Expected data layout
 
@@ -217,6 +221,12 @@ Below is a sample run on the earlier evaluation protocol (10 Unsplash JPEGs that
 
 ## Metrics
 
+Both metrics follow the evaluation protocol used in the super-resolution literature (SRCNN, VDSR, EDSR and later), so the numbers are comparable with published tables:
+
+- They are computed on the **luminance (Y) channel** only, using the ITU-R BT.601 conversion of MATLAB's `rgb2ycbcr` (`Y = 16 + (65.481·R + 128.553·G + 24.966·B) / 255`, range 16–235). Single-channel (grayscale) files are used as they are.
+- A border of **`scale` pixels** is cropped from every side of both images before comparison, since interpolation and convolution are unreliable at the edges.
+- SSIM uses an 11×11 Gaussian window (σ = 1.5) and is averaged over the region where the window fits entirely.
+
 ### PSNR (Peak Signal-to-Noise Ratio)
 
 Measures the ratio between the maximum possible signal power and the power of the noise (error) affecting its fidelity. Higher is better.
@@ -225,7 +235,7 @@ Measures the ratio between the maximum possible signal power and the power of th
 PSNR = 10 · log10( MAX_I² / MSE )
 ```
 
-where `MAX_I` is the maximum possible pixel value (255 for our 8-bit images) and `MSE` is the mean squared error between the original and reconstructed image:
+where `MAX_I` is the maximum possible pixel value (255 for our 8-bit images) and `MSE` is the mean squared error between the Y channels of the original and reconstructed image:
 
 ```
 MSE = (1 / (m·n)) · Σ Σ [I_orig(i, j) − I_new(i, j)]²

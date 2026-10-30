@@ -31,9 +31,9 @@ Pixel Bicubic::interpolate(Image& img, float x, float y) {
 	}
 
 	Pixel result;
-	result.r = static_cast<unsigned char>(std::clamp(sum_r, 0.0, 255.0));
-	result.g = static_cast<unsigned char>(std::clamp(sum_g, 0.0, 255.0));
-	result.b = static_cast<unsigned char>(std::clamp(sum_b, 0.0, 255.0));
+	result.r = static_cast<unsigned char>(std::clamp(std::round(sum_r), 0.0, 255.0));
+	result.g = static_cast<unsigned char>(std::clamp(std::round(sum_g), 0.0, 255.0));
+	result.b = static_cast<unsigned char>(std::clamp(std::round(sum_b), 0.0, 255.0));
 
 	return result;
 }
