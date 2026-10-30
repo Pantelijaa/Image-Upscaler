@@ -11,13 +11,13 @@ from models import MODELS, build_model, default_lr, save_checkpoint
 from export_onnx import export_onnx
 
 
-def train(data_dir, arch="vdsr", train_minutes=240, batch_size=64, lr=None, val_split=0.2, scale=2):
+def train(data_dir, arch="vdsr", train_minutes=60, batch_size=64, lr=None, val_split=0.2, scale=2, stride=14):
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 	if lr is None:
 		lr = default_lr(arch)
 
 	print("\nLoading dataset...", flush=True)
-	dataset = SRDataset(data_dir, patch_size=33, scale=scale, stride=14)
+	dataset = SRDataset(data_dir, patch_size=33, scale=scale, stride=stride)
 	val_size = int(len(dataset) * val_split)
 	train_size = len(dataset) - val_size
 	train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
@@ -136,6 +136,8 @@ def parse_args():
 	                    help="learning rate (default: per-architecture value from models.py)")
 	parser.add_argument("--scale", type=int, default=2, help="upscaling factor")
 	parser.add_argument("--val-split", type=float, default=0.2)
+	parser.add_argument("--stride", type=int, default=14,
+	                    help="patch extraction stride; larger = fewer patches, less memory")
 	return parser.parse_args()
 
 
@@ -149,4 +151,5 @@ if __name__ == "__main__":
 		lr=args.lr,
 		val_split=args.val_split,
 		scale=args.scale,
+		stride=args.stride,
 	)

@@ -20,16 +20,10 @@ import torch.nn as nn
 
 class SRCNN(nn.Module):
 	"""
-	SRCNN 9-5-5 (Dong et al., "Image Super-Resolution Using Deep Convolutional
-	Networks", 2014).
-
+	SRCNN 9-5-5
 	  patch extraction : conv 9x9,  1 -> n1 (64)
 	  non-linear map   : conv 5x5, n1 -> n2 (32)
 	  reconstruction   : conv 5x5, n2 -> 1
-
-	The paper uses no padding (output smaller than input). Padding is added
-	here so the output has the same size as the input, which the C++
-	inference side relies on.
 	"""
 
 	name = "srcnn"
@@ -50,9 +44,6 @@ class SRCNN(nn.Module):
 				nn.init.zeros_(m.bias)
 
 	def param_groups(self, lr):
-		"""
-		Paper trains the reconstruction layer with a 10x smaller learning rate.
-		"""
 		return [
 			{"params": self.patch_extraction.parameters(), "lr": lr},
 			{"params": self.non_linear_map.parameters(), "lr": lr},
@@ -67,8 +58,7 @@ class SRCNN(nn.Module):
 
 class VDSR(nn.Module):
 	"""
-	VDSR-style residual network (Kim et al., "Accurate Image Super-Resolution
-	Using Very Deep Convolutional Networks", 2016).
+	VDSR-style residual network
 
 	  num_layers conv 3x3 layers with num_features channels and ReLU between
 	  them; the network predicts the residual that is added to the bicubic
@@ -104,7 +94,6 @@ class VDSR(nn.Module):
 		return self.network(x) + x
 
 
-# name -> (class, default constructor kwargs, default learning rate)
 MODELS = {
 	"srcnn": (SRCNN, {}, 1e-4),
 	"vdsr": (VDSR, {"num_layers": 8, "num_features": 64}, 1e-3),
@@ -112,7 +101,6 @@ MODELS = {
 
 
 def build_model(name, **overrides):
-	"""Construct a model by name. Keyword overrides go to the constructor."""
 	if name not in MODELS:
 		raise ValueError(f"Unknown model '{name}'. Available: {', '.join(MODELS)}")
 	cls, defaults, _ = MODELS[name]
