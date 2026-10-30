@@ -36,7 +36,7 @@ Image Upscaler/
 ├── Image Upscaler.cpp        # Entry point: runs all methods and prints a results summary
 ├── core/
 │   ├── Image.h / .cpp        # Simple RGB image container (load/save via stb_image)
-│   └── Scaler.h / .cpp       # Generic resampling loop driven by an IInterpolator
+│   └── Scaler.h / .cpp       # Separable resampling driven by an IInterpolator kernel (+ per-pixel reference)
 ├── interpolation/
 │   ├── IInterpolator.h       # Interpolator interface
 │   ├── Bilinear.h / .cpp     # Bilinear interpolation
@@ -52,7 +52,7 @@ CNN/
 ├── prepare_data.py            # Downloads T91/BSD200 (train) and Set5/Set14/BSD100/Urban100 (test), builds HR/LR PNGs
 ├── SRDataset.py               # Patch-based training dataset (augmentation + downscale/upscale pairs)
 ├── train_cnn.py               # Training loop (--arch srcnn|vdsr), saves the best checkpoint to models/pth/
-└── export_onnx.py             # Exports trained checkpoints to models/onnx/<arch>_vN.onnx
+└── export_onnx.py             # Exports trained checkpoints to models/onnx/<arch>_x<scale>_vN.onnx (--int8: quantized copy)
 
 CMakeLists.txt                 # Top-level project, defines the prepare_data / train_* / export_onnx targets
 Image Upscaler/CMakeLists.txt  # Builds the C++ executable, fetches OpenCV + ONNX Runtime
@@ -72,7 +72,9 @@ P  = f(x, y)  = ((y2 - y) / (y2 - y1)) * R1     + ((y - y1) / (y2 - y1)) * R2
 
 This uses the 4 nearest neighboring pixels (`Q11`, `Q21`, `Q12`, `Q22`) around the target point.
 
-Both interpolators are driven by the same resampling loop (`core/Scaler.cpp`), which uses **pixel-centre alignment**: destination pixel `x` samples the source at `(x + 0.5) · ratio − 0.5`, the same convention as OpenCV, Pillow and MATLAB. Sanity check on Set5: our bicubic gives 33.68 dB at 2x and 28.43 dB at 4x, against 33.66 / 28.42 dB reported in the literature.
+Both interpolators are driven by the same resampling code (`core/Scaler.cpp`), which uses **pixel-centre alignment**: destination pixel `x` samples the source at `(x + 0.5) · ratio − 0.5`, the same convention as OpenCV, Pillow and MATLAB. Sanity check on Set5: our bicubic gives 33.68 dB at 2x and 28.43 dB at 4x, against 33.66 / 28.42 dB reported in the literature.
+
+Each interpolator exposes its 1-D kernel (`radius()`, `weight(t)`) and its direct 2-D per-pixel formula (`interpolate(x, y)`). `Scaler::upscalePerPixel` evaluates the per-pixel formula for every output pixel — the textbook algorithm, kept as the reference. `Scaler::upscale`, used by the benchmark, computes the same thing **separably**: the kernel weights and source indices are precomputed once per destination column and row, a horizontal pass resamples every source row to the target width, and a vertical pass resamples the result to the target height, with rows processed in parallel (OpenMP). The output is identical to the per-pixel version (bilinear bit-exact; bicubic differs by ±1 in ~4 pixels per million from float vs. double accumulation) at a fraction of the cost: 16 kernel evaluations and 16 multiply-adds per pixel become 0 and ~6.
 
 ### Bicubic interpolation
 
@@ -105,9 +107,11 @@ Common to both:
 
 - Input: a single-channel (luminance) patch that has already been enlarged to the target size with bicubic interpolation; output: the reconstructed patch of the same size.
 - Trained in **PyTorch** with **MSE loss** and the **Adam** optimizer. SRCNN uses a 10× smaller learning rate for its reconstruction layer, as in the paper.
-- Checkpoints (`models/pth/best_<arch>.pth`) store the architecture name and configuration alongside the weights, so `export_onnx.py` can rebuild any model without extra arguments.
+- One model is trained **per scale factor**; the degradation it learns to undo depends on the factor, and a 2x model evaluated at 4x is no better than bicubic.
+- Checkpoints (`models/pth/best_<arch>_x<scale>.pth`) store the architecture name, configuration and scale alongside the weights, so `export_onnx.py` can rebuild any model without extra arguments.
 - After training, the model is evaluated on images that were **not** part of the training set, to check that it generalizes rather than memorizes.
 - **Inference on new images happens in C++ via ONNX Runtime**, after exporting the trained checkpoint to `.onnx`.
+- **int8 quantization (optional):** `python CNN/export_onnx.py --int8` writes a statically quantized copy of each model (uint8 activations, per-channel int8 weights, calibrated on 20 training images degraded like the benchmark inputs). The quantized file sits next to the float one and is benchmarked like any other model. Measured on the current VDSR 2x model: about 3.4× faster CPU inference for −0.01 to −0.02 dB PSNR and −0.0001 SSIM on Set5, Set14 and BSD100.
 
 ## Requirements
 
@@ -124,20 +128,21 @@ This project is designed to be opened directly in **Visual Studio** as a CMake p
 2. In the **CMake Targets View**, you'll see the project laid out as:
    - `CMakeTarget` — the C++ executable (the upscaler/benchmark itself)
    - `prepare_data` — downloads and prepares the training and benchmark datasets (`CNN/prepare_data.py`)
-   - `train_srcnn` / `train_vdsr` — trains a new model of that architecture, one target per architecture in `CNN/models.py`
+   - `train_<arch>_x<scale>` (`train_srcnn_x2`, `train_srcnn_x4`, `train_vdsr_x2`, `train_vdsr_x4`) — trains a model of that architecture for that scale factor
    - `export_onnx` — exports every already-trained checkpoint in `models/pth/` to ONNX
+   - `quantize_onnx` — writes an int8 copy (`<name>_int8.onnx`) of every float model in `models/onnx/`
 
    ![CMake Targets View](results/CMakeTargets.png)
 
 3. **Prepare the datasets:** Right-click `prepare_data` → **Build** (or run `python -I CNN/prepare_data.py`). This is needed once; it skips anything already present.
-4. **(Optional) Train a model:** Right-click `train_srcnn` or `train_vdsr` → **Build**. This runs `CNN/train_cnn.py`, which trains the chosen network for a fixed time budget, saves the best checkpoint to `models/pth/best_<arch>.pth`, then automatically exports it to `models/onnx/<arch>_vN.onnx`. From a terminal, the script takes more options:
+4. **(Optional) Train a model:** Right-click e.g. `train_vdsr_x2` → **Build**. This runs `CNN/train_cnn.py`, which trains the chosen network for that scale factor for a fixed time budget, saves the best checkpoint to `models/pth/best_<arch>_x<scale>.pth`, then automatically exports it to `models/onnx/<arch>_x<scale>_vN.onnx`. A model is only ever benchmarked at the scale it was trained for. From a terminal, the script takes more options:
 
    ```
    python CNN/train_cnn.py --arch srcnn --minutes 60 --scale 2 --batch-size 64 --lr 1e-4
    ```
 5. **Run the benchmark:** Set `CMakeTarget` as the startup item and run it. It will:
    - Load every test set found in `data/test/` (one folder per set)
-   - Upscale each `LR_x2` / `LR_x4` image using Bilinear, Bicubic, and every `.onnx` model found in `models/onnx/`
+   - Upscale each `LR_x2` / `LR_x4` image using Bilinear, Bicubic, and every `.onnx` model found in `models/onnx/` whose name carries that scale (`<arch>_x<scale>_vN.onnx`)
    - Compute PSNR/SSIM against the `HR` images, write every per-image result to `results/results.csv` and print an averages table grouped by dataset, scale and method
    - Save all upscaled images to `results/<Set>/<Method>/x<scale>/`
 
@@ -156,7 +161,8 @@ data/
         ├── LR_x2/       # HR bicubic-downscaled by 2, PNG, same file names as HR/
         └── LR_x4/       # HR bicubic-downscaled by 4, PNG, same file names as HR/
 models/
-└── onnx/                # Trained models, named <arch>_vN.onnx (srcnn_v1.onnx, vdsr_v1.onnx, ...)
+└── onnx/                # Trained models, named <arch>_x<scale>_vN.onnx (srcnn_x2_v1.onnx, vdsr_x4_v1.onnx, ...)
+                         # and their optional int8 copies, <arch>_x<scale>_vN_int8.onnx
 ```
 
 LR and HR files share the same name, so the benchmark pairs them directly. Any extra folder under `data/test/` with this layout is picked up automatically.
@@ -201,7 +207,7 @@ The benchmark upscales each LR image back to the HR size with every method and c
 
 Below is a sample run on the earlier evaluation protocol (10 Unsplash JPEGs that are no longer part of the repo, metrics over RGB) comparing Bilinear, Bicubic, and two CNN checkpoints (`srcnn_v1`, `srcnn_v2`) at 2x and 4x. Results on the standard benchmarks above will replace it once the models are retrained on T91+BSD200.
 
-> **Note:** the two checkpoints in this run were trained with the 8-layer residual network, which is now named `vdsr` in `CNN/models.py` (the ONNX files were renamed to `vdsr_v1.onnx` / `vdsr_v2.onnx`). They are *not* the 3-layer SRCNN; a run with the real `srcnn` architecture is still to be added.
+> **Note:** the two checkpoints in this run were trained with the 8-layer residual network at 2x, which is now named `vdsr` in `CNN/models.py` (the ONNX files were renamed to `vdsr_x2_v1.onnx` / `vdsr_x2_v2.onnx`). They are *not* the 3-layer SRCNN; a run with the real `srcnn` architecture is still to be added.
 
 ### Per-image results
 
@@ -273,7 +279,16 @@ Interpretation:
 
 ### Timing
 
-Wall-clock execution time is also measured and compared for every method, since interpolation quality generally comes at the cost of extra computation.
+Wall-clock execution time is also measured and compared for every method, since interpolation quality generally comes at the cost of extra computation. Every upscale is run three times and the **median** is reported, with microsecond resolution, so one-off effects such as thread-pool start-up do not count. Timings only mean something in a **Release** build: ONNX Runtime is a prebuilt release library whatever the configuration, while a Debug build slows the hand-written interpolators by roughly 50×.
+
+Per-image averages on Set5 (AMD Ryzen AI 7 350, 8 cores / 16 threads, Release, 2x upscaling):
+
+| Method | Before (per-pixel, Debug) | Per-pixel, Release | Separable + OpenMP, Release |
+|---|---|---|---|
+| Bilinear | 21 ms | ~6 ms | ~1 ms |
+| Bicubic | 207 ms | ~2 ms* | ~0.9 ms |
+
+\* measured on `baby` only.
 
 | Metric | Meaning | Better when... |
 |---|---|---|

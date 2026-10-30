@@ -19,6 +19,7 @@
 #include <chrono>
 #include <map>
 #include <memory>
+#include <regex>
 #include <tuple>
 #include <filesystem>
 #include "core/Image.h"
@@ -37,6 +38,7 @@ const std::string PATH_TO_TEST = PATH_TO_DATA + "test/";
 const std::string PATH_TO_ONNX_MODELS = "../../../../models/onnx/";
 
 const std::vector<int> SCALES = { 2, 4 };
+const int TIMING_REPEATS = 3;  // each upscale is timed this many times, the median is reported
 
 struct MetricResult {
 	std::string dataset;
@@ -45,22 +47,45 @@ struct MetricResult {
 	std::string filename;
 	double psnr;
 	double ssim;
-	long long time_ms;
+	double time_ms;
 };
 
 // An upscaling method: a name and a function that enlarges an image by a factor.
+// scale == 0 means the method works at any factor; a trained model is tied to
+// the factor it was trained for (taken from its file name, <arch>_x<scale>_vN.onnx).
 struct Method {
 	std::string name;
+	int scale;
 	std::function<Image(Image&, int)> upscale;
 };
+
+static int scale_from_model_name(const std::string& name) {
+	std::smatch m;
+	return std::regex_search(name, m, std::regex("_x(\\d+)(_|$)")) ? std::stoi(m[1]) : 0;
+}
 
 // Compute averages per (dataset, scale, method)
 struct Accumulator {
 	double psnr_sum = 0.0;
 	double ssim_sum = 0.0;
-	long long time_sum = 0;
+	double time_sum = 0.0;
 	int count = 0;
 };
+
+// Median wall-clock time in ms over TIMING_REPEATS runs; returns the last result.
+static Image timed_upscale(const Method& method, Image& img, int scale, double& time_ms) {
+	std::vector<double> times;
+	Image upscaled;
+	for (int i = 0; i < TIMING_REPEATS; ++i) {
+		auto start = std::chrono::steady_clock::now();
+		upscaled = method.upscale(img, scale);
+		auto end = std::chrono::steady_clock::now();
+		times.push_back(std::chrono::duration<double, std::milli>(end - start).count());
+	}
+	std::sort(times.begin(), times.end());
+	time_ms = times[times.size() / 2];
+	return upscaled;
+}
 
 static bool is_image_file(const fs::path& p) {
 	std::string ext = p.extension().string();
@@ -106,10 +131,8 @@ static void run_method(
 			continue;
 		}
 
-		auto start = std::chrono::steady_clock::now();
-		Image upscaled = method.upscale(img, scale);
-		auto end = std::chrono::steady_clock::now();
-		long long duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+		double duration_ms = 0.0;
+		Image upscaled = timed_upscale(method, img, scale, duration_ms);
 
 		if (upscaled.getWidth() != found->second.getWidth() || upscaled.getHeight() != found->second.getHeight()) {
 			std::cerr << "Size mismatch for " << filename << ": upscaled "
@@ -125,7 +148,7 @@ static void run_method(
 		std::cout << "  " << std::left << std::setw(28) << filename
 			<< " PSNR " << std::fixed << std::setprecision(2) << psnr << " dB"
 			<< "  SSIM " << std::setprecision(4) << ssim
-			<< "  " << duration_ms << " ms\n";
+			<< "  " << std::setprecision(2) << duration_ms << " ms\n";
 
 		results.push_back({ dataset, scale, method.name, filename, psnr, ssim, duration_ms });
 		upscaled.saveToFile(output_dir + fs::path(filename).stem().string() + ".png");
@@ -137,7 +160,8 @@ static void write_csv(const std::vector<MetricResult>& results, const std::strin
 	csv << "dataset,scale,method,image,psnr,ssim,time_ms\n";
 	for (const auto& r : results) {
 		csv << r.dataset << "," << r.scale << "," << r.method << "," << r.filename << ","
-			<< std::fixed << std::setprecision(4) << r.psnr << "," << r.ssim << "," << r.time_ms << "\n";
+			<< std::fixed << std::setprecision(4) << r.psnr << "," << r.ssim << ","
+			<< std::setprecision(3) << r.time_ms << "\n";
 	}
 	std::cout << "\nPer-image results written to " << path << "\n";
 }
@@ -196,7 +220,7 @@ static void print_summary(const std::vector<MetricResult>& results) {
 			<< std::setw(col_count) << acc.count
 			<< std::setw(col_psnr) << std::fixed << std::setprecision(2) << acc.psnr_sum / acc.count
 			<< std::setw(col_ssim) << std::fixed << std::setprecision(4) << acc.ssim_sum / acc.count
-			<< std::setw(col_time) << acc.time_sum / acc.count
+			<< std::setw(col_time) << std::fixed << std::setprecision(2) << acc.time_sum / acc.count
 			<< " |\n";
 	}
 	separator();
@@ -212,8 +236,8 @@ int main(int argc, char* argv[])
 	Bicubic bicubic;
 
 	std::vector<Method> methods = {
-		{ "Bilinear", [&](Image& img, int s) { return Scaler::upscale(img, img.getWidth() * s, img.getHeight() * s, bilinear); } },
-		{ "Bicubic",  [&](Image& img, int s) { return Scaler::upscale(img, img.getWidth() * s, img.getHeight() * s, bicubic); } },
+		{ "Bilinear", 0, [&](Image& img, int s) { return Scaler::upscale(img, img.getWidth() * s, img.getHeight() * s, bilinear); } },
+		{ "Bicubic",  0, [&](Image& img, int s) { return Scaler::upscale(img, img.getWidth() * s, img.getHeight() * s, bicubic); } },
 	};
 
 	std::vector<std::unique_ptr<SRCNNUpscaler>> cnn_models;
@@ -230,8 +254,10 @@ int main(int argc, char* argv[])
 			try {
 				cnn_models.push_back(std::make_unique<SRCNNUpscaler>(onnx_path.string()));
 				SRCNNUpscaler* model = cnn_models.back().get();
-				methods.push_back({ model->get_model_name(), [model](Image& img, int s) { return model->upscale(img, s); } });
-				std::cout << "Loaded ONNX model: " << model->get_model_name() << "\n";
+				int scale = scale_from_model_name(model->get_model_name());
+				methods.push_back({ model->get_model_name(), scale, [model](Image& img, int s) { return model->upscale(img, s); } });
+				std::cout << "Loaded ONNX model: " << model->get_model_name()
+					<< (scale ? " (x" + std::to_string(scale) + " only)" : " (no scale in name: run at every scale)") << "\n";
 			}
 			catch (const std::exception& e) {
 				std::cerr << "Failed to load ONNX model " << onnx_path << ": " << e.what() << std::endl;
@@ -283,7 +309,9 @@ int main(int argc, char* argv[])
 				continue;
 			}
 			for (const auto& method : methods) {
-				run_method(dataset, scale, lr_dir, hr_images, method, all_results);
+				if (method.scale == 0 || method.scale == scale) {
+					run_method(dataset, scale, lr_dir, hr_images, method, all_results);
+				}
 			}
 		}
 	}

@@ -36,7 +36,7 @@ set(OPENCV_LIB_DIR "${OPENCV_BUILD_DIR}/x64/vc16/lib")
 set(OPENCV_BIN_DIR "${OPENCV_BUILD_DIR}/x64/vc16/bin")
 
 # --- ONNX Runtime ---
-set(ORT_VERSION "1.21.0")
+set(ORT_VERSION "1.31.1")
 FetchContent_Declare(
     onnxruntime
     URL "https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-win-x64-${ORT_VERSION}.zip"
@@ -70,6 +70,11 @@ target_link_libraries(CMakeTarget PRIVATE
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET CMakeTarget PROPERTY CXX_STANDARD 20)
+endif()
+
+find_package(OpenMP)
+if (OpenMP_CXX_FOUND)
+  target_link_libraries(CMakeTarget PRIVATE OpenMP::OpenMP_CXX)
 endif()
 
 # Copy OpenCV DLLs next to the executable

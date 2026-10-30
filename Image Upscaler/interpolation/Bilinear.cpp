@@ -1,5 +1,10 @@
 #include "Bilinear.h"
 
+// Triangle kernel: W(t) = 1 - |t| for |t| < 1, else 0
+double Bilinear::weight(double t) const {
+	return (std::max)(0.0, 1.0 - std::abs(t));
+}
+
 Pixel Bilinear::interpolate(Image& img, float x, float y) {
 	int x1 = static_cast<int>(floor(x));
 	int y1 = static_cast<int>(floor(y));

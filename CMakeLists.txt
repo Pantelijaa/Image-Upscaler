@@ -24,15 +24,17 @@ add_custom_target(prepare_data
     USES_TERMINAL
 )
 
-# cmake --build . --target train_srcnn / train_vdsr   (one target per architecture in CNN/models.py)
+# cmake --build . --target train_<arch>_x<scale>   (one target per architecture in CNN/models.py and scale factor)
 foreach(arch srcnn vdsr)
-    add_custom_target(train_${arch}
-        COMMAND ${CMAKE_COMMAND} -E env PYTHONUNBUFFERED=1
-            ${Python3_EXECUTABLE} -X utf8 CNN/train_cnn.py --arch ${arch}
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        COMMENT "Training ${arch} model and exporting to ONNX"
-        USES_TERMINAL
-    )
+    foreach(scale 2 4)
+        add_custom_target(train_${arch}_x${scale}
+            COMMAND ${CMAKE_COMMAND} -E env PYTHONUNBUFFERED=1
+                ${Python3_EXECUTABLE} -X utf8 CNN/train_cnn.py --arch ${arch} --scale ${scale}
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            COMMENT "Training ${arch} x${scale} model and exporting to ONNX"
+            USES_TERMINAL
+        )
+    endforeach()
 endforeach()
 
 # cmake --build . --target export_onnx     (exports every models/pth/best_*.pth)
@@ -41,6 +43,15 @@ add_custom_target(export_onnx
         ${Python3_EXECUTABLE} -X utf8 CNN/export_onnx.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "Exporting trained checkpoints to ONNX"
+    USES_TERMINAL
+)
+
+# cmake --build . --target quantize_onnx   (int8 copy of every float model in models/onnx)
+add_custom_target(quantize_onnx
+    COMMAND ${CMAKE_COMMAND} -E env PYTHONUNBUFFERED=1
+        ${Python3_EXECUTABLE} -X utf8 CNN/export_onnx.py --int8
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Quantizing ONNX models to int8"
     USES_TERMINAL
 )
 

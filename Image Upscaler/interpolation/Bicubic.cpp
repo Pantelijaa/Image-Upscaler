@@ -43,7 +43,7 @@ Pixel Bicubic::interpolate(Image& img, float x, float y) {
  *
  *  W(t) = (a+2)|t|³ - (a+3)|t|² + 1,        |t| ≤ 1
  *  W(t) = a|t|³ - 5a|t|² + 8a|t| - 4a,  1 < |t| < 2
- *  W(t) = 0,                                 t| ≥ 2.
+ *  W(t) = 0,                                |t| ≥ 2.
  */
 double Bicubic::cubic_weight(double x) {
 	constexpr double a = -0.5; // Catmull-Rom spline
