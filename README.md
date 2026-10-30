@@ -108,7 +108,7 @@ Common to both:
 - Input: a single-channel (luminance) patch that has already been enlarged to the target size with bicubic interpolation; output: the reconstructed patch of the same size.
 - Trained in **PyTorch** with **MSE loss** and the **Adam** optimizer. SRCNN uses a 10× smaller learning rate for its reconstruction layer, as in the paper.
 - One model is trained **per scale factor**; the degradation it learns to undo depends on the factor, and a 2x model evaluated at 4x is no better than bicubic.
-- Checkpoints (`models/pth/best_<arch>_x<scale>.pth`) store the architecture name, configuration and scale alongside the weights, so `export_onnx.py` can rebuild any model without extra arguments.
+- Checkpoints (`models/pth/best_<arch>_x<scale>.pth`) store the architecture name, configuration and scale alongside the weights, so `export_onnx.py` can rebuild any model without extra arguments. A second file, `last_<arch>_x<scale>.pth`, is written every epoch with the optimizer and scheduler state so that training can be **resumed** (`--resume` or the `resume_*` targets): the epoch counter, learning-rate schedule and best validation loss continue from where they stopped, and the train/validation split is fixed by `--seed` so no validation patch is ever trained on.
 - After training, the model is evaluated on images that were **not** part of the training set, to check that it generalizes rather than memorizes.
 - **Inference on new images happens in C++ via ONNX Runtime**, after exporting the trained checkpoint to `.onnx`.
 - **int8 quantization (optional):** `python CNN/export_onnx.py --int8` writes a statically quantized copy of each model (uint8 activations, per-channel int8 weights, calibrated on 20 training images degraded like the benchmark inputs). The quantized file sits next to the float one and is benchmarked like any other model. Measured on the current VDSR 2x model: about 3.4× faster CPU inference for −0.01 to −0.02 dB PSNR and −0.0001 SSIM on Set5, Set14 and BSD100.
@@ -128,7 +128,8 @@ This project is designed to be opened directly in **Visual Studio** as a CMake p
 2. In the **CMake Targets View**, you'll see the project laid out as:
    - `CMakeTarget` — the C++ executable (the upscaler/benchmark itself)
    - `prepare_data` — downloads and prepares the training and benchmark datasets (`CNN/prepare_data.py`)
-   - `train_<arch>_x<scale>` (`train_srcnn_x2`, `train_srcnn_x4`, `train_vdsr_x2`, `train_vdsr_x4`) — trains a model of that architecture for that scale factor
+   - `train_<arch>_x<scale>` (`train_srcnn_x2`, `train_srcnn_x4`, `train_vdsr_x2`, `train_vdsr_x4`) — trains a model of that architecture for that scale factor from scratch
+   - `resume_<arch>_x<scale>` — continues that training from where it stopped, with a fresh time budget
    - `export_onnx` — exports every already-trained checkpoint in `models/pth/` to ONNX
    - `quantize_onnx` — writes an int8 copy (`<name>_int8.onnx`) of every float model in `models/onnx/`
 

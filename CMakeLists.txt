@@ -24,7 +24,7 @@ add_custom_target(prepare_data
     USES_TERMINAL
 )
 
-# cmake --build . --target train_<arch>_x<scale>   (one target per architecture in CNN/models.py and scale factor)
+# cmake --build . --target train_<arch>_x<scale> / resume_<arch>_x<scale>   (per architecture in CNN/models.py and scale factor)
 foreach(arch srcnn vdsr)
     foreach(scale 2 4)
         add_custom_target(train_${arch}_x${scale}
@@ -32,6 +32,13 @@ foreach(arch srcnn vdsr)
                 ${Python3_EXECUTABLE} -X utf8 CNN/train_cnn.py --arch ${arch} --scale ${scale}
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             COMMENT "Training ${arch} x${scale} model and exporting to ONNX"
+            USES_TERMINAL
+        )
+        add_custom_target(resume_${arch}_x${scale}
+            COMMAND ${CMAKE_COMMAND} -E env PYTHONUNBUFFERED=1
+                ${Python3_EXECUTABLE} -X utf8 CNN/train_cnn.py --arch ${arch} --scale ${scale} --resume
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            COMMENT "Resuming ${arch} x${scale} training from its last checkpoint"
             USES_TERMINAL
         )
     endforeach()

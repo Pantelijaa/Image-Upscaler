@@ -11,21 +11,36 @@ from models import MODELS, build_model, default_lr, save_checkpoint
 from export_onnx import export_onnx
 
 
-def train(data_dir, arch="vdsr", train_minutes=60, batch_size=64, lr=None, val_split=0.2, scale=2, stride=14):
+def train(data_dir, arch="vdsr", train_minutes=60, batch_size=64, lr=None, val_split=0.2, scale=2, stride=14, seed=0, resume=False):
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 	if lr is None:
 		lr = default_lr(arch)
+	torch.manual_seed(seed)
+
+	os.makedirs("models/pth", exist_ok=True)
+	best_path = f"models/pth/best_{arch}_x{scale}.pth"
+	last_path = f"models/pth/last_{arch}_x{scale}.pth"
+
+	# Resume continues from the last epoch's full state (weights, optimizer, scheduler, epoch counter, best loss); the time budget applies to this session.
+	ckpt = None
+	if resume:
+		if not os.path.exists(last_path):
+			raise SystemExit(f"Nothing to resume: {last_path} not found.")
+		ckpt = torch.load(last_path, map_location=device, weights_only=True)
+		if ckpt["seed"] != seed:
+			raise SystemExit(f"{last_path} was trained with --seed {ckpt['seed']}; pass the same seed so the train/val split matches.")
 
 	print("\nLoading dataset...", flush=True)
 	dataset = SRDataset(data_dir, patch_size=33, scale=scale, stride=stride)
 	val_size = int(len(dataset) * val_split)
 	train_size = len(dataset) - val_size
-	train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+	split = torch.Generator().manual_seed(seed)
+	train_dataset, val_dataset = random_split(dataset, [train_size, val_size], generator=split)
 
 	train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 	val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-	model, config = build_model(arch)
+	model, config = build_model(arch, **(ckpt["config"] if ckpt else {}))
 	model = model.to(device)
 	criterion = nn.MSELoss()
 	optimizer = torch.optim.Adam(model.param_groups(lr))
@@ -35,11 +50,16 @@ def train(data_dir, arch="vdsr", train_minutes=60, batch_size=64, lr=None, val_s
 		optimizer, mode="min", factor=0.5, patience=10
 	)
 
-	os.makedirs("models/pth", exist_ok=True)
-	checkpoint_path = f"models/pth/best_{arch}_x{scale}.pth"
-
 	best_val_loss = float("inf")
 	epoch = 0
+	if ckpt:
+		model.load_state_dict(ckpt["state_dict"])
+		optimizer.load_state_dict(ckpt["optimizer"])
+		scheduler.load_state_dict(ckpt["scheduler"])
+		epoch = ckpt["epoch"]
+		best_val_loss = ckpt["best_val_loss"]
+		print(f"Resumed from {last_path}: {epoch} epochs done, best val_loss {best_val_loss:.6f}")
+
 	time_limit = train_minutes * 60
 	num_params = sum(p.numel() for p in model.parameters())
 
@@ -49,7 +69,8 @@ def train(data_dir, arch="vdsr", train_minutes=60, batch_size=64, lr=None, val_s
 	print(f"    Batch size:         {batch_size}")
 	print(f"    Train patches:      {train_size}")
 	print(f"    Validation patches: {val_size}")
-	print(f"    Learning rate:      {lr}")
+	print(f"    Learning rate:      {optimizer.param_groups[0]['lr']}")
+	print(f"    Seed:               {seed}")
 	print(f"    Train duration:     {train_minutes} min", flush=True)
 
 	start_time = time.time()
@@ -110,17 +131,24 @@ def train(data_dir, arch="vdsr", train_minutes=60, batch_size=64, lr=None, val_s
 			flush=True
 		)
 
-		if val_loss < best_val_loss:
-			best_val_loss = val_loss
-			save_checkpoint(
-				checkpoint_path, model, arch, config, scale,
-				extra={"epoch": epoch, "val_loss": val_loss},
-			)
+		improved = val_loss < best_val_loss
+		best_val_loss = min(best_val_loss, val_loss)
+		state = {
+			"epoch": epoch,
+			"val_loss": val_loss,
+			"best_val_loss": best_val_loss,
+			"seed": seed,
+			"optimizer": optimizer.state_dict(),
+			"scheduler": scheduler.state_dict(),
+		}
+		save_checkpoint(last_path, model, arch, config, scale, extra=state)
+		if improved:
+			save_checkpoint(best_path, model, arch, config, scale, extra={"epoch": epoch, "val_loss": val_loss, "seed": seed})
 			print(f"  -> saved best model (val_loss={best_val_loss:.6f})")
 	total = time.time() - start_time
 	print(f"Training complete. {epoch} epochs in {total:.1f}s. Best val_loss: {best_val_loss:.6f}")
 
-	onnx_path, version = export_onnx(checkpoint_path, "models/onnx")
+	onnx_path, version = export_onnx(best_path, "models/onnx")
 	print(f"Ready for C++ inference: {onnx_path}", flush=True)
 
 
@@ -130,14 +158,17 @@ def parse_args():
 	                    help="network architecture (default: vdsr)")
 	parser.add_argument("--data", default=os.path.join("data", "train", "HR"),
 	                    help="directory with high-resolution training images")
-	parser.add_argument("--minutes", type=float, default=240, help="training time budget")
+	parser.add_argument("--minutes", type=float, default=240, help="training time budget for this session")
 	parser.add_argument("--batch-size", type=int, default=64)
 	parser.add_argument("--lr", type=float, default=None,
-	                    help="learning rate (default: per-architecture value from models.py)")
+	                    help="learning rate (default: per-architecture value from models.py; ignored with --resume)")
 	parser.add_argument("--scale", type=int, default=2, help="upscaling factor")
 	parser.add_argument("--val-split", type=float, default=0.2)
 	parser.add_argument("--stride", type=int, default=14,
 	                    help="patch extraction stride; larger = fewer patches, less memory")
+	parser.add_argument("--seed", type=int, default=0, help="seed for weight init and the train/val split")
+	parser.add_argument("--resume", action="store_true",
+	                    help="continue from models/pth/last_<arch>_x<scale>.pth instead of starting over")
 	return parser.parse_args()
 
 
@@ -152,4 +183,6 @@ if __name__ == "__main__":
 		val_split=args.val_split,
 		scale=args.scale,
 		stride=args.stride,
+		seed=args.seed,
+		resume=args.resume,
 	)
