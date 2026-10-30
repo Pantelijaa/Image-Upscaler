@@ -241,7 +241,7 @@ int main()
 	// --- Test sets ---------------------------------------------------------
 	if (!fs::exists(PATH_TO_TEST)) {
 		std::cerr << "Test data not found at " << PATH_TO_TEST
-			<< ". Run `python -I CNN/prepare_data.py` first." << std::endl;
+			<< ". Build the prepare_data CMake target (or run `python -I CNN/prepare_data.py`) first." << std::endl;
 		return 1;
 	}
 

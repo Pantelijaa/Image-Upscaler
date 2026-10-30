@@ -15,19 +15,16 @@ project ("Image Upscaler")
 find_package (Python3 REQUIRED)
 message(STATUS "Python3 executable: ${Python3_EXECUTABLE}")
 
-set(SR_ARCH "vdsr" CACHE STRING "Architecture for the train_cnn target (srcnn or vdsr), see CNN/models.py")
-set_property(CACHE SR_ARCH PROPERTY STRINGS srcnn vdsr)
-
-# cmake --build . --target train_cnn        (uses SR_ARCH)
-add_custom_target(train_cnn
+# cmake --build . --target prepare_data
+add_custom_target(prepare_data
     COMMAND ${CMAKE_COMMAND} -E env PYTHONUNBUFFERED=1
-        ${Python3_EXECUTABLE} -X utf8 CNN/train_cnn.py --arch ${SR_ARCH}
+        ${Python3_EXECUTABLE} -I -X utf8 CNN/prepare_data.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Training ${SR_ARCH} model and exporting to ONNX"
+    COMMENT "Downloading and preparing training and benchmark datasets"
     USES_TERMINAL
 )
 
-# cmake --build . --target train_srcnn / train_vdsr
+# cmake --build . --target train_srcnn / train_vdsr   (one target per architecture in CNN/models.py)
 foreach(arch srcnn vdsr)
     add_custom_target(train_${arch}
         COMMAND ${CMAKE_COMMAND} -E env PYTHONUNBUFFERED=1

@@ -54,7 +54,7 @@ CNN/
 ├── train_cnn.py               # Training loop (--arch srcnn|vdsr), saves the best checkpoint to models/pth/
 └── export_onnx.py             # Exports trained checkpoints to models/onnx/<arch>_vN.onnx
 
-CMakeLists.txt                 # Top-level project, defines the train_* / export_onnx targets
+CMakeLists.txt                 # Top-level project, defines the prepare_data / train_* / export_onnx targets
 Image Upscaler/CMakeLists.txt  # Builds the C++ executable, fetches OpenCV + ONNX Runtime
 ```
 
@@ -111,7 +111,7 @@ Common to both:
 
 - **Visual Studio 2022** with the "Desktop development with C++" workload and CMake support
 - **vcpkg** (configured via `vcpkg.json` / `vcpkg-configuration.json`, used through `VCPKG_ROOT`)
-- **Python 3** in `PATH` (required for the `train_cnn` and `export_onnx` CMake targets — PyTorch, OpenCV-Python, ONNX, and ONNX Runtime must be installed in that environment)
+- **Python 3** (required for the `prepare_data`, `train_*` and `export_onnx` CMake targets — PyTorch, OpenCV-Python, Pillow, ONNX, and ONNX Runtime must be installed in that environment; pin it with `Python3_EXECUTABLE` in a `CMakeUserPresets.json` if CMake picks the wrong interpreter)
 - Internet access on first configure (CMake `FetchContent` downloads prebuilt OpenCV and ONNX Runtime)
 
 ## Building & Running
@@ -121,18 +121,19 @@ This project is designed to be opened directly in **Visual Studio** as a CMake p
 1. Open the folder in Visual Studio and let it configure the CMake cache (this fetches OpenCV and ONNX Runtime on first run).
 2. In the **CMake Targets View**, you'll see the project laid out as:
    - `CMakeTarget` — the C++ executable (the upscaler/benchmark itself)
-   - `train_srcnn` / `train_vdsr` — trains a new model of that architecture
-   - `train_cnn` — trains the architecture chosen by the `SR_ARCH` CMake cache variable (default `vdsr`)
+   - `prepare_data` — downloads and prepares the training and benchmark datasets (`CNN/prepare_data.py`)
+   - `train_srcnn` / `train_vdsr` — trains a new model of that architecture, one target per architecture in `CNN/models.py`
    - `export_onnx` — exports every already-trained checkpoint in `models/pth/` to ONNX
 
    ![CMake Targets View](results/CMakeTargets.png)
 
-3. **(Optional) Train a model:** Right-click `train_srcnn` or `train_vdsr` → **Build**. This runs `CNN/train_cnn.py`, which trains the chosen network for a fixed time budget, saves the best checkpoint to `models/pth/best_<arch>.pth`, then automatically exports it to `models/onnx/<arch>_vN.onnx`. From a terminal, the script takes more options:
+3. **Prepare the datasets:** Right-click `prepare_data` → **Build** (or run `python -I CNN/prepare_data.py`). This is needed once; it skips anything already present.
+4. **(Optional) Train a model:** Right-click `train_srcnn` or `train_vdsr` → **Build**. This runs `CNN/train_cnn.py`, which trains the chosen network for a fixed time budget, saves the best checkpoint to `models/pth/best_<arch>.pth`, then automatically exports it to `models/onnx/<arch>_vN.onnx`. From a terminal, the script takes more options:
 
    ```
    python CNN/train_cnn.py --arch srcnn --minutes 60 --scale 2 --batch-size 64 --lr 1e-4
    ```
-4. **Run the benchmark:** Set `CMakeTarget` as the startup item and run it. It will:
+5. **Run the benchmark:** Set `CMakeTarget` as the startup item and run it. It will:
    - Load every test set found in `data/test/` (one folder per set)
    - Upscale each `LR_x2` / `LR_x4` image using Bilinear, Bicubic, and every `.onnx` model found in `models/onnx/`
    - Compute PSNR/SSIM against the `HR` images, write every per-image result to `results/results.csv` and print an averages table grouped by dataset, scale and method

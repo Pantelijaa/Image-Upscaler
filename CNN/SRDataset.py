@@ -33,7 +33,10 @@ class SRDataset(Dataset):
 			+ glob.glob(os.path.join(image_dir, "*.bmp"))
 		)
 		if not files:
-			raise FileNotFoundError(f"No training images found in {image_dir}. Run CNN/prepare_data.py first.")
+			raise FileNotFoundError(
+				f"No training images found in {image_dir}. "
+				"Build the prepare_data CMake target (or run `python -I CNN/prepare_data.py`) first."
+			)
 
 		lr_chunks, hr_chunks = [], []
 		for path in files:
