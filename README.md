@@ -116,7 +116,6 @@ Common to both:
 ## Requirements
 
 - **Visual Studio 2022** with the "Desktop development with C++" workload and CMake support
-- **vcpkg** (configured via `vcpkg.json` / `vcpkg-configuration.json`, used through `VCPKG_ROOT`)
 - **Python 3** (required for the `prepare_data`, `train_*` and `export_onnx` CMake targets — PyTorch, OpenCV-Python, Pillow, ONNX, and ONNX Runtime must be installed in that environment; pin it with `Python3_EXECUTABLE` in a `CMakeUserPresets.json` if CMake picks the wrong interpreter)
 - Internet access on first configure (CMake `FetchContent` downloads prebuilt OpenCV and ONNX Runtime)
 

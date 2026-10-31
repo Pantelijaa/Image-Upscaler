@@ -40,6 +40,7 @@ set(ORT_VERSION "1.31.1")
 FetchContent_Declare(
     onnxruntime
     URL "https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-win-x64-${ORT_VERSION}.zip"
+    DOWNLOAD_EXTRACT_TIMESTAMP FALSE
 )
 FetchContent_MakeAvailable(onnxruntime)
 set(ORT_ROOT "${onnxruntime_SOURCE_DIR}")
@@ -68,9 +69,7 @@ target_link_libraries(CMakeTarget PRIVATE
     onnxruntime
 )
 
-if (CMAKE_VERSION VERSION_GREATER 3.12)
-  set_property(TARGET CMakeTarget PROPERTY CXX_STANDARD 20)
-endif()
+set_property(TARGET CMakeTarget PROPERTY CXX_STANDARD 20)
 
 find_package(OpenMP)
 if (OpenMP_CXX_FOUND)
