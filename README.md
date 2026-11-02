@@ -78,8 +78,6 @@ This project is designed to be opened directly in **Visual Studio** as a CMake p
    - `export_onnx` — exports every already-trained checkpoint in `models/pth/` to ONNX
    - `quantize_onnx` — writes an int8 copy (`<name>_int8.onnx`) of every float model in `models/onnx/`
 
-   ![CMake Targets View](results/CMakeTargets.png)
-
 3. **Prepare the datasets:** Right-click `prepare_data` → **Build** (or run `python -I CNN/prepare_data.py`). This is needed once; it skips anything already present.
 4. **(Optional) Train a model:** Right-click e.g. `train_vdsr_x2` → **Build**. This runs `CNN/train_cnn.py`, which trains the chosen network for that scale factor for a fixed time budget, saves the best checkpoint to `models/pth/best_<arch>_x<scale>.pth`, then automatically exports it to `models/onnx/<arch>_x<scale>_vN.onnx`. A model is only ever benchmarked at the scale it was trained for. From a terminal, the script takes more options:
 
