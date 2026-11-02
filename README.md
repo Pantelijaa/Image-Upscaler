@@ -1,6 +1,6 @@
 # Image Upscaler
 
-A C++ image super-resolution playground that compares classical interpolation methods (**Bilinear**, **Bicubic**) against **learned CNN models** - the original three-layer **SRCNN** and a deeper **VDSR-style residual network** — trained in Python/PyTorch, exported to ONNX, and run in C++ via ONNX Runtime.
+A C++ image super-resolution playground that compares classical interpolation methods (**Bilinear**, **Bicubic**) against **learned CNN models** - the original three-layer **SRCNN** and a deeper **VDSR-style residual network** - trained in Python/PyTorch, exported to ONNX, and run in C++ via ONNX Runtime.
 
 The project measures upscaling quality using **PSNR** and **SSIM**, and reports per-image and per-method timing so the different approaches can be compared side by side.
 
@@ -71,12 +71,12 @@ This project is designed to be opened directly in **Visual Studio** as a CMake p
 
 1. Open the folder in Visual Studio and let it configure the CMake cache (this fetches OpenCV and ONNX Runtime on first run).
 2. In the **CMake Targets View**, you'll see the project laid out as:
-   - `CMakeTarget` — the C++ executable (the upscaler/benchmark itself)
-   - `prepare_data` — downloads and prepares the training and benchmark datasets (`CNN/prepare_data.py`)
+   - `CMakeTarget` - the C++ executable (the upscaler/benchmark itself)
+   - `prepare_data` - downloads and prepares the training and benchmark datasets (`CNN/prepare_data.py`)
    - `train_<arch>_x<scale>` (`train_srcnn_x2`, `train_srcnn_x4`, `train_vdsr_x2`, `train_vdsr_x4`) — trains a model of that architecture for that scale factor from scratch
-   - `resume_<arch>_x<scale>` — continues that training from where it stopped, with a fresh time budget
-   - `export_onnx` — exports every already-trained checkpoint in `models/pth/` to ONNX
-   - `quantize_onnx` — writes an int8 copy (`<name>_int8.onnx`) of every float model in `models/onnx/`
+   - `resume_<arch>_x<scale>` - continues that training from where it stopped, with a fresh time budget
+   - `export_onnx` - exports every already-trained checkpoint in `models/pth/` to ONNX
+   - `quantize_onnx` - writes an int8 copy (`<name>_int8.onnx`) of every float model in `models/onnx/`
 
 3. **Prepare the datasets:** Right-click `prepare_data` → **Build** (or run `python -I CNN/prepare_data.py`). This is needed once; it skips anything already present.
 4. **(Optional) Train a model:** Right-click e.g. `train_vdsr_x2` → **Build**. This runs `CNN/train_cnn.py`, which trains the chosen network for that scale factor for a fixed time budget, saves the best checkpoint to `models/pth/best_<arch>_x<scale>.pth`, then automatically exports it to `models/onnx/<arch>_x<scale>_vN.onnx`. A model is only ever benchmarked at the scale it was trained for. From a terminal, the script takes more options:
@@ -241,10 +241,6 @@ Average time per image in milliseconds (AMD Ryzen AI 7 350, 8 cores / 16 threads
 | BSD100 | 4x | 0.72 | 0.83 | 32.7 | 71.0 |
 | Urban100 | 2x | 7.35 | 8.10 | 171.8 | 295.5 |
 | Urban100 | 4x | 6.24 | 7.04 | 157.2 | 277.6 |
-
-The averages table as printed by the benchmark:
-
-![Averages per method](results/Averages.png)
 
 **Takeaways:**
 
