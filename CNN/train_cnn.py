@@ -158,7 +158,7 @@ def parse_args():
 	                    help="network architecture (default: vdsr)")
 	parser.add_argument("--data", default=os.path.join("data", "train", "HR"),
 	                    help="directory with high-resolution training images")
-	parser.add_argument("--minutes", type=float, default=240, help="training time budget for this session")
+	parser.add_argument("--minutes", type=float, default=60, help="training time budget for this session")
 	parser.add_argument("--batch-size", type=int, default=64)
 	parser.add_argument("--lr", type=float, default=None,
 	                    help="learning rate (default: per-architecture value from models.py; ignored with --resume)")
